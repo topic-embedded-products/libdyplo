@@ -19,3 +19,5 @@ Makefile.in
 missing
 *.l[oa]
 *.o
+/ar-lib
+/config.h.in
