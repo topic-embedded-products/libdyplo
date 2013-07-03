@@ -9,10 +9,24 @@ class CooperativeScheduler
 {
 public:
 	Process* downstream;
+	bool is_locked;
 
+	CooperativeScheduler():
+		downstream(NULL),
+		is_locked(false)
+	{
+	}
+
+	void process_one()
+	{
+		unlock();
+		downstream->process_one();
+		lock();
+	}
+	
 	void wait_until_not_full()
 	{
-		downstream->process_one();
+		process_one();
 	}
 	void wait_until_not_empty()
 	{
@@ -23,7 +37,19 @@ public:
 	}
 	void trigger_not_empty()
 	{
-		downstream->process_one();
+		process_one();
+	}
+
+	void lock()
+	{
+		YAFFUT_CHECK(!is_locked);
+		is_locked = true;
+	}
+
+	void unlock()
+	{
+		YAFFUT_CHECK(is_locked);
+		is_locked = false;
 	}
 };
 
@@ -105,4 +131,5 @@ FUNC(fixed_memory_queue_cooperative_scheduler)
 
 	YAFFUT_EQUAL(42, *proc.output.begin_read(1));
 	proc.output.end_read(1);
+	YAFFUT_CHECK(proc.output.empty());
 }
