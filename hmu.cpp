@@ -1,10 +1,8 @@
-#include "hmu.h"
+#include <stdlib.h>
+#include "hmu.hpp"
 
 namespace hmu
 {
-	
-int init(void)
-{
-	return 0;
-}
+
+
 }

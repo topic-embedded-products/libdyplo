@@ -1,11 +1,12 @@
+ACLOCAL_AMFLAGS = -I .
 AM_LDFLAGS = $(OPENMP_CFLAGS)
 
 lib_LTLIBRARIES = libhmu.la
 libhmu_la_SOURCES = \
-    hmu.cpp hmu.h
+    hmu.cpp hmu.hpp
 libhmu_la_CXXFLAGS = $(OPENMP_CFLAGS)
 hmu_libincludedir = $(includedir)/tmb
-hmu_libinclude_HEADERS = hmu.h
+hmu_libinclude_HEADERS = hmu.hpp
 
 TESTS = testhmu
 bin_PROGRAMS = $(TESTS)
