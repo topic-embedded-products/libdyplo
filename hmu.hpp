@@ -76,14 +76,21 @@ public:
 		free(m_buff);
 	}
 
-	/* Return pointer to memory of "count" bytes. Will block
-	 * if no room in buffer */
-	T* begin_write(unsigned int count)
+	/* Return pointer to memory of "count" elements. Will block
+	 * if no room in buffer for count_min items */
+	unsigned int begin_write(T* &buffer, unsigned int count_min)
 	{
 		ScopedLock<Scheduler> lock(m_scheduler);
-		wait_until_not_full();
-		DEBUG_ASSERT(!full(), "write when full");
-		return m_first;
+		wait_until_not_full(count_min);
+		buffer = m_first;
+		unsigned int result;
+		if (m_last > m_first)
+			result = m_last - m_first;
+		else if (m_last == m_first) /* Can mean "full" or "empty", size determines which it is */
+			result = (m_size == 0) ? (m_end - m_first) : 0;
+		else
+			result = m_end - m_first;
+		return result;
 	}
 
 	/* Informs queue that data as issued by begin_write is
@@ -99,12 +106,20 @@ public:
 
 	/* Return pointer to memory of count bytes. Blocks if
 	 * no data available (someone must call end_write) */
-	const T* begin_read(unsigned int count)
+	unsigned int begin_read(T* &buffer, unsigned int count_min)
 	{
 		ScopedLock<Scheduler> lock(m_scheduler);
-		wait_until_not_empty();
-		DEBUG_ASSERT(!empty(), "read when empty");
-		return m_last;
+		wait_until_not_empty(count_min);
+		
+		buffer = m_last;
+		unsigned int result;
+		if (m_first > m_last)
+			result =  m_first - m_last;
+		else if (m_size)
+			result = m_end - m_last;
+		else
+			result = 0;
+		return result;
 	}
 
 	/* Notify queue that count bytes have been consumed and
@@ -113,27 +128,47 @@ public:
 	{
 		ScopedLock<Scheduler> lock(m_scheduler);
 		m_last = increment(m_last, count);
+		DEBUG_ASSERT(m_size >= count, "invalid end_read");
 		m_size -= count;
 		m_scheduler.trigger_not_full();
 	}
 
 	unsigned int capacity() const { return m_end - m_buff; }
 	unsigned int size() const { return m_size; }
+	unsigned int available() const { return capacity() - size(); }
 	bool empty() const { return size() == 0; }
 	bool full() const { return size() == capacity(); }
+
+	void push_one(const T data)
+	{
+		T* buffer;
+		begin_write(buffer, 1);
+		*buffer = data;
+		end_write(1);
+	}
+
+	T pop_one()
+	{
+		T* buffer;
+		begin_read(buffer, 1);
+		T result = *buffer;
+		end_read(1);
+		return result;
+	}
+	
 
 	Scheduler& get_scheduler() { return m_scheduler; }
 	const Scheduler& get_scheduler() const { return m_scheduler; }
 protected:
-	void wait_until_not_full()
+	void wait_until_not_full(unsigned int count)
 	{
-		while (full())
+		while (available() < count)
 			m_scheduler.wait_until_not_full();
 	}
 
-	void wait_until_not_empty()
+	void wait_until_not_empty(unsigned int count)
 	{
-		while (empty())
+		while (size() < count)
 			m_scheduler.wait_until_not_empty();
 	}
 
