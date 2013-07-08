@@ -3,10 +3,18 @@ AM_LDFLAGS = $(OPENMP_CFLAGS)
 
 lib_LTLIBRARIES = libhmu.la
 libhmu_la_SOURCES = \
-    hmu.cpp hmu.hpp
+    hmu.cpp \
+    generics.hpp \
+    queue.hpp \
+    scopedlock.hpp \
+    noopscheduler.hpp 
 libhmu_la_CXXFLAGS = $(OPENMP_CFLAGS)
-hmu_libincludedir = $(includedir)/tmb
-hmu_libinclude_HEADERS = hmu.hpp
+hmu_libincludedir = $(includedir)/hmu
+hmu_libinclude_HEADERS = \
+    generics.hpp \
+    queue.hpp \
+    scopedlock.hpp \
+    noopscheduler.hpp
 
 TESTS = testhmu
 bin_PROGRAMS = $(TESTS)

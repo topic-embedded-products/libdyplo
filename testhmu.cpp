@@ -1,57 +1,12 @@
+#include "queue.hpp"
+#include "noopscheduler.hpp"
+#include "cooperativescheduler.hpp"
+
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
-#include "hmu.hpp"
-
 using namespace hmu; /* I'm lazy */
 
-class CooperativeScheduler
-{
-public:
-	Process* downstream;
-	bool is_locked;
-
-	CooperativeScheduler():
-		downstream(NULL),
-		is_locked(false)
-	{
-	}
-
-	void process_one()
-	{
-		unlock();
-		downstream->process_one();
-		lock();
-	}
-	
-	void wait_until_not_full()
-	{
-		process_one();
-	}
-	void wait_until_not_empty()
-	{
-		YAFFUT_FAIL("wait_until_not_empty called");
-	}
-	void trigger_not_full()
-	{
-	}
-	void trigger_not_empty()
-	{
-		process_one();
-	}
-
-	void lock()
-	{
-		YAFFUT_CHECK(!is_locked);
-		is_locked = true;
-	}
-
-	void unlock()
-	{
-		//YAFFUT_CHECK(is_locked);
-		is_locked = false;
-	}
-};
 
 template <class T, int blocksize = 1> class CooperativeProcess: public Process
 {
