@@ -2,21 +2,21 @@ ACLOCAL_AMFLAGS = -I m4
 AM_LDFLAGS = $(OPENMP_CFLAGS)
 
 lib_LTLIBRARIES = libhmu.la
-libhmu_la_SOURCES = \
-    hmu.cpp \
-    generics.hpp \
-    queue.hpp \
-    scopedlock.hpp \
-    noopscheduler.hpp \
-    pthreadscheduler.hpp
-libhmu_la_CXXFLAGS = $(OPENMP_CFLAGS)
-hmu_libincludedir = $(includedir)/hmu
 hmu_libinclude_HEADERS = \
     generics.hpp \
+    condition.hpp \
+    cooperativescheduler.hpp \
+    mutex.hpp \
     queue.hpp \
     scopedlock.hpp \
     noopscheduler.hpp \
     pthreadscheduler.hpp
+libhmu_la_SOURCES = \
+    noopscheduler.cpp \
+    pthreadscheduler.cpp \
+    $(hmu_libinclude_HEADERS)
+libhmu_la_CXXFLAGS = $(OPENMP_CFLAGS)
+hmu_libincludedir = $(includedir)/hmu
 
 TESTS = testhmu
 bin_PROGRAMS = $(TESTS)
