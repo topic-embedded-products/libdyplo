@@ -5,11 +5,12 @@ lib_LTLIBRARIES = libdyplo.la
 dyplo_libinclude_HEADERS = \
     generics.hpp \
     condition.hpp \
-    cooperativescheduler.hpp \
     mutex.hpp \
+    thread.hpp \
     queue.hpp \
     scopedlock.hpp \
     noopscheduler.hpp \
+    cooperativescheduler.hpp \
     pthreadscheduler.hpp
 libdyplo_la_SOURCES = \
     noopscheduler.cpp \
@@ -18,10 +19,11 @@ libdyplo_la_SOURCES = \
 libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
 dyplo_libincludedir = $(includedir)/dyplo
 
-TESTS = testdyplo
+TESTS = testdyplo testdyploqueue
 bin_PROGRAMS = $(TESTS)
 
 AM_DEFAULT_SOURCE_EXT = .cpp
 testdyplo_SOURCES = testdyplo.cpp yaffut.h
 testdyplo_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 
+testdyploqueue_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
