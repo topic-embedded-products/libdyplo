@@ -3,7 +3,7 @@
 #include "noopscheduler.hpp"
 #include <stdexcept>
 
-namespace hmu
+namespace dyplo
 {
 	void NoopScheduler::wait_until_not_full()
 	{

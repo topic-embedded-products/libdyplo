@@ -4,7 +4,7 @@
 #include "mutex.hpp"
 #include "condition.hpp"
 
-namespace hmu
+namespace dyplo
 {
 	class InterruptedException: public std::exception
 	{

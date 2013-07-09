@@ -7,14 +7,14 @@
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
-using namespace hmu; /* I'm lazy */
+using namespace dyplo; /* I'm lazy */
 
 
 template <class T, int blocksize = 1> class CooperativeProcess: public Process
 {
 public:
-	hmu::FixedMemoryQueue<T, CooperativeScheduler> input;
-	hmu::FixedMemoryQueue<T, hmu::NoopScheduler> output;
+	dyplo::FixedMemoryQueue<T, CooperativeScheduler> input;
+	dyplo::FixedMemoryQueue<T, dyplo::NoopScheduler> output;
 
 	CooperativeProcess():
 		input(blocksize),
@@ -51,7 +51,7 @@ FUNC(a_fixed_memory_queue_without_scheduler)
 	const unsigned int capacity = 10;
 	const unsigned int block = 2;
 
-	hmu::FixedMemoryQueue<int, hmu::NoopScheduler> q(capacity);
+	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> q(capacity);
 
 	for (int i = 0; i < 20; ++i)
 	{
@@ -93,7 +93,7 @@ FUNC(a_fixed_memory_queue_without_scheduler)
 
 FUNC(a_fixed_memory_queue_border_cases)
 {
-	hmu::FixedMemoryQueue<int, hmu::NoopScheduler> q(5);
+	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> q(5);
 	int* data;
 
 	YAFFUT_EQUAL(5, q.begin_write(data, 1));
@@ -189,13 +189,13 @@ public:
 
 FUNC(multiple_processes_and_queues)
 {
-	hmu::FixedMemoryQueue<int, CooperativeScheduler> input_to_a(1);
-	hmu::FixedMemoryQueue<int, CooperativeScheduler> between_a_and_b(1);
-	hmu::FixedMemoryQueue<int, hmu::NoopScheduler> output_from_b(2);
+	dyplo::FixedMemoryQueue<int, CooperativeScheduler> input_to_a(1);
+	dyplo::FixedMemoryQueue<int, CooperativeScheduler> between_a_and_b(1);
+	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> output_from_b(2);
 	
-	CooperativeLinkableProcess < hmu::FixedMemoryQueue<int, CooperativeScheduler>, hmu::FixedMemoryQueue<int, CooperativeScheduler> >
+	CooperativeLinkableProcess < dyplo::FixedMemoryQueue<int, CooperativeScheduler>, dyplo::FixedMemoryQueue<int, CooperativeScheduler> >
 		a(input_to_a, between_a_and_b);
-	CooperativeLinkableProcess< hmu::FixedMemoryQueue<int, CooperativeScheduler>, hmu::FixedMemoryQueue<int, NoopScheduler> >
+	CooperativeLinkableProcess< dyplo::FixedMemoryQueue<int, CooperativeScheduler>, dyplo::FixedMemoryQueue<int, NoopScheduler> >
 		b(between_a_and_b, output_from_b);
 
 	input_to_a.push_one(50);
@@ -276,18 +276,18 @@ private:
 
 FUNC(threading_scheduler_terminate_immediately)
 {
-	hmu::FixedMemoryQueue<int, PthreadScheduler> input_to_a(2);
-	hmu::FixedMemoryQueue<int, PthreadScheduler> output_from_a(2);
- 	ThreadedProcess < hmu::FixedMemoryQueue<int, PthreadScheduler>, hmu::FixedMemoryQueue<int, PthreadScheduler> >
+	dyplo::FixedMemoryQueue<int, PthreadScheduler> input_to_a(2);
+	dyplo::FixedMemoryQueue<int, PthreadScheduler> output_from_a(2);
+ 	ThreadedProcess < dyplo::FixedMemoryQueue<int, PthreadScheduler>, dyplo::FixedMemoryQueue<int, PthreadScheduler> >
  		proc(input_to_a, output_from_a);
 	/* Do nothing. This destroys the thread before it runs, which must not hang. */
 }
 
 FUNC(threading_scheduler_block_on_input)
 {
-	hmu::FixedMemoryQueue<int, PthreadScheduler> input_to_a(2);
-	hmu::FixedMemoryQueue<int, PthreadScheduler> output_from_a(2);
-	ThreadedProcess < hmu::FixedMemoryQueue<int, PthreadScheduler>, hmu::FixedMemoryQueue<int, PthreadScheduler> >
+	dyplo::FixedMemoryQueue<int, PthreadScheduler> input_to_a(2);
+	dyplo::FixedMemoryQueue<int, PthreadScheduler> output_from_a(2);
+	ThreadedProcess < dyplo::FixedMemoryQueue<int, PthreadScheduler>, dyplo::FixedMemoryQueue<int, PthreadScheduler> >
 		proc(input_to_a, output_from_a);
 
 	input_to_a.push_one(50);
@@ -300,9 +300,9 @@ FUNC(threading_scheduler_block_on_input)
 
 FUNC(threading_scheduler_block_on_output)
 {
-	hmu::FixedMemoryQueue<int, PthreadScheduler> input_to_a(2);
-	hmu::FixedMemoryQueue<int, PthreadScheduler> output_from_a(1);
- 	ThreadedProcess < hmu::FixedMemoryQueue<int, PthreadScheduler>, hmu::FixedMemoryQueue<int, PthreadScheduler> >
+	dyplo::FixedMemoryQueue<int, PthreadScheduler> input_to_a(2);
+	dyplo::FixedMemoryQueue<int, PthreadScheduler> output_from_a(1);
+ 	ThreadedProcess < dyplo::FixedMemoryQueue<int, PthreadScheduler>, dyplo::FixedMemoryQueue<int, PthreadScheduler> >
  		proc(input_to_a, output_from_a);
 
 	input_to_a.push_one(50);

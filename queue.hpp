@@ -5,7 +5,7 @@
 #include "generics.hpp"
 #include "scopedlock.hpp"
 
-namespace hmu
+namespace dyplo
 {
 
 	template <class T, class Scheduler> class FixedMemoryQueue //: public IQueue<T>

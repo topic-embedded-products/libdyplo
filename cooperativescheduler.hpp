@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdexcept>
 
-namespace hmu
+namespace dyplo
 {
 
 	class Process

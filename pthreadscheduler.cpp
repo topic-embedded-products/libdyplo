@@ -1,6 +1,6 @@
 #include "pthreadscheduler.hpp"
 
-namespace hmu
+namespace dyplo
 {
 	const char* InterruptedException::what() const throw()
 	{

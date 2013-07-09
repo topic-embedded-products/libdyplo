@@ -1,6 +1,6 @@
 #pragma once
 
-namespace hmu
+namespace dyplo
 {
 	class NoopScheduler
 	{

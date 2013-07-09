@@ -2,7 +2,7 @@
 
 #include <pthread.h>
 
-namespace hmu
+namespace dyplo
 {
 	class Condition
 	{
