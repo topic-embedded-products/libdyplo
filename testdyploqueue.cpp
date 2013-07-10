@@ -1,7 +1,6 @@
 #include "queue.hpp"
 #include "noopscheduler.hpp"
 
-#define YAFFUT_MAIN
 #include "yaffut.h"
 
 FUNC(a_fixed_memory_queue_without_scheduler)
