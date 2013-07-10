@@ -4,8 +4,6 @@
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
-using namespace dyplo; /* I'm lazy */
-
 FUNC(a_fixed_memory_queue_without_scheduler)
 {
 	const unsigned int capacity = 10;
