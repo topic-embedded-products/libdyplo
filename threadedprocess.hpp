@@ -6,47 +6,70 @@
 
 namespace dyplo
 {
-	template <class InputQueueClass, class OutputQueueClass, int blocksize = 1> class ThreadedProcess
+	template <class InputQueueClass, class OutputQueueClass,
+		void(*ProcessBlockFunction)(typename InputQueueClass::Element*, typename OutputQueueClass::Element*),
+		int blocksize = 1>
+	class ThreadedProcess
 	{
-	public:
-		InputQueueClass &input;
-		OutputQueueClass &output;
+	protected:
+		InputQueueClass *input;
+		OutputQueueClass *output;
 		Thread m_thread;
+	public:
+		typedef typename InputQueueClass::Element InputElement;
+		typedef typename OutputQueueClass::Element OutputElement;
 
-		ThreadedProcess(InputQueueClass &input_, OutputQueueClass &output_):
-			input(input_),
-			output(output_),
-			m_thread(&run, this)
+		ThreadedProcess():
+			input(NULL),
+			output(NULL),
+			m_thread()
 		{
 		}
 
 		~ThreadedProcess()
 		{
-			input.get_scheduler().interrupt();
-			output.get_scheduler().interrupt();
+			if (input != NULL)
+				input->get_scheduler().interrupt();
+			if (output != NULL)
+				output->get_scheduler().interrupt();
 			m_thread.join();
+		}
+
+		void set_input(InputQueueClass *value)
+		{
+			input = value;
+			if (input && output)
+				start();
+		}
+
+		void set_output(OutputQueueClass *value)
+		{
+			output = value;
+			if (input && output)
+				start();
+		}
+
+		void set_process_block_function(void (*routine) (OutputElement *dest, InputElement *src))
+		{
 		}
 
 		void* process()
 		{
 			unsigned int count;
-			typename InputQueueClass::Element *src;
-			typename OutputQueueClass::Element *dest;
+			InputElement *src;
+			OutputElement *dest;
 
 			try
 			{
 				for(;;)
 				{
-					count = input.begin_read(src, blocksize);
+					count = input->begin_read(src, blocksize);
 					DEBUG_ASSERT(count >= blocksize, "invalid value from begin_read");
-					count = output.begin_write(dest, blocksize);
+					count = output->begin_write(dest, blocksize);
 					DEBUG_ASSERT(count >= blocksize, "invalid value from begin_write");
-					for (int i = 0; i < blocksize; ++i)
-					{
-						*dest++ = (*src++) + 5;
-					}
-					output.end_write(blocksize);
-					input.end_read(blocksize);
+					ProcessBlockFunction(dest, src);
+					output->end_write(blocksize);
+					input->end_read(blocksize);
 				}
 			}
 			catch (const dyplo::InterruptedException&)
@@ -56,6 +79,11 @@ namespace dyplo
 			return 0;
 		}
 	private:
+		void start()
+		{
+			m_thread.start(&run, this);
+		}
+
 		static void* run(void* arg)
 		{
 			return ((ThreadedProcess*)arg)->process();

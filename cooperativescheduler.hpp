@@ -52,6 +52,10 @@ namespace dyplo
 		void unlock()
 		{
 		}
+
+		void interrupt()
+		{
+		}
 	};
 
 }

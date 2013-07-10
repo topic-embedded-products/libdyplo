@@ -9,16 +9,19 @@ namespace dyplo
 	protected:
 		pthread_t m_thread;
 	public:
-		Thread(void *(*start_routine) (void *), void *arg)
+		Thread():
+			m_thread(pthread_self())
 		{
-			int result = pthread_create(&m_thread, NULL, start_routine, arg);
-			if (result != 0)
-				throw std::runtime_error("Failed to start thread");
 		}
 
 		~Thread()
 		{
 			pthread_join(m_thread, NULL); /* Fails with EDEADLK if already joined */
+		}
+
+		int start(void *(*start_routine) (void *), void *arg)
+		{
+			return pthread_create(&m_thread, NULL, start_routine, arg);
 		}
 
 		int join(void **retval = NULL)

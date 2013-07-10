@@ -7,10 +7,11 @@ namespace dyplo
 {
 	template <class InputQueueClass, class OutputQueueClass, int blocksize = 1> class CooperativeProcess: public Process
 	{
-	public:
+	protected:
 		InputQueueClass *input;
 		OutputQueueClass *output;
 
+	public:
 		void set_input(InputQueueClass *value)
 		{
 			input = value;
