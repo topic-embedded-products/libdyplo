@@ -5,16 +5,19 @@
 
 #include "yaffut.h"
 
-template <class T, class OutputQueue, int blocksize = 1> class AddOne: public dyplo::CooperativeProcess<
-		dyplo::FixedMemoryQueue<T, dyplo::CooperativeScheduler>,
-		OutputQueue,
-		blocksize>
+template <class T, int blocksize> void process_block_add_one(T* dest, T* src)
 {
-	void process_block(T* dest, T* src)
-	{
-		for (int i = 0; i < blocksize; ++i)
-			*dest++ = (*src++) + 1;
-	}
+	for (int i = 0; i < blocksize; ++i)
+		*dest++ = (*src++) + 1;
+}
+
+template <class T, class OutputQueue, int blocksize = 1>
+class AddOne: public dyplo::CooperativeProcess<
+	dyplo::FixedMemoryQueue<T, dyplo::CooperativeScheduler>,
+	OutputQueue,
+	process_block_add_one<T, blocksize>,
+	blocksize>
+{
 };
 
 

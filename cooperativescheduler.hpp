@@ -10,6 +10,7 @@ namespace dyplo
 	{
 	public:
 		virtual void process_one() = 0;
+		virtual void interrupt() = 0;
 	};
 
 	class CooperativeScheduler
@@ -55,6 +56,8 @@ namespace dyplo
 
 		void interrupt()
 		{
+			if (downstream)
+				downstream->interrupt();
 		}
 	};
 

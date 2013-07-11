@@ -2,10 +2,10 @@
 
 #include "yaffut.h"
 
-template <class T> void process_block_add_five(int* dest, int* src)
+template <class T, int raise, int blocksize> void process_block_add_constant(T* dest, T* src)
 {
-	for (int i = 0; i < 1; ++i)
-		*dest++ = (*src++) + 5;
+	for (int i = 0; i < blocksize; ++i)
+		*dest++ = (*src++) + raise;
 }
 
 
@@ -13,10 +13,9 @@ template <class T, int blocksize = 1>
 class AddFive: public dyplo::ThreadedProcess<
 		dyplo::FixedMemoryQueue<T, dyplo::PthreadScheduler>,
 		dyplo::FixedMemoryQueue<T, dyplo::PthreadScheduler>,
-		process_block_add_five<T>,
+		process_block_add_constant<T, 5, blocksize>,
 		blocksize>
 {
-	
 };
 
 FUNC(threading_scheduler_terminate_immediately)
@@ -94,23 +93,18 @@ template <class T, int blocksize = 1>
 class AddFiveTQTPCQ: public dyplo::ThreadedProcess<
 		dyplo::FixedMemoryQueue<T, dyplo::PthreadScheduler>,
 		dyplo::FixedMemoryQueue<T, dyplo::CooperativeScheduler>,
-		process_block_add_five<T>,
+		process_block_add_constant<T, 5, blocksize>,
 		blocksize>
 {
-
 };
 
 template <class T, class OutputQueue, int blocksize = 1>
 class AddTwoCQCP: public dyplo::CooperativeProcess<
 		dyplo::FixedMemoryQueue<T, dyplo::CooperativeScheduler>,
 		OutputQueue,
+		process_block_add_constant<T, 2, blocksize>,
 		blocksize>
 {
-	void process_block(T* dest, T* src)
-	{
-		for (int i = 0; i < blocksize; ++i)
-			*dest++ = (*src++) + 2;
-	}
 };
 
 FUNC(threading_and_cooperative_mix)
@@ -139,4 +133,31 @@ FUNC(threading_and_cooperative_mix)
   	input_to_a.push_one(53);
   	YAFFUT_EQUAL(61, output_from_c.pop_one());
   	YAFFUT_EQUAL(62, output_from_c.pop_one());
+}
+
+FUNC(threading_and_cooperative_mix_block_output)
+{
+	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
+	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> output_from_a(2);
+	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> output_from_b(2);
+	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_c(2);
+
+	AddFiveTQTPCQ<int> proc_a;
+	AddTwoCQCP<int, dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> > proc_b;
+	AddTwoCQCP<int, dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> > proc_c;
+
+	proc_a.set_input(&input_to_a);
+	proc_a.set_output(&output_from_a);
+	proc_c.set_input(&output_from_b);
+	proc_c.set_output(&output_from_c);
+	proc_b.set_input(&output_from_a);
+	proc_b.set_output(&output_from_b);
+
+	input_to_a.push_one(50);
+	YAFFUT_EQUAL(59, output_from_c.pop_one()); /* 5 + 2 + 2 */
+ 	input_to_a.push_one(51);
+  	input_to_a.push_one(52);
+  	YAFFUT_EQUAL(60, output_from_c.pop_one());
+  	input_to_a.push_one(53);
+  	input_to_a.push_one(54); /* blocks on output */
 }

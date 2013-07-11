@@ -5,13 +5,33 @@
 
 namespace dyplo
 {
-	template <class InputQueueClass, class OutputQueueClass, int blocksize = 1> class CooperativeProcess: public Process
+	template <
+		class InputQueueClass,
+		class OutputQueueClass,
+		void(*ProcessBlockFunction)(typename InputQueueClass::Element*, typename OutputQueueClass::Element*),
+		int blocksize = 1>
+	class CooperativeProcess: public Process
 	{
 	protected:
 		InputQueueClass *input;
 		OutputQueueClass *output;
 
 	public:
+		CooperativeProcess():
+			input(NULL),
+			output(NULL)
+		{}
+		
+		~CooperativeProcess()
+		{
+			/* Inform downstream and upstream elements that we
+			 * will terminate */
+			if (input != NULL)
+				input->get_scheduler().interrupt();
+			if (output != NULL)
+				output->get_scheduler().interrupt();
+		}
+
 		void set_input(InputQueueClass *value)
 		{
 			input = value;
@@ -23,11 +43,7 @@ namespace dyplo
 			output = value;
 		}
 
-		virtual void process_block(
-			typename OutputQueueClass::Element *dest,
-			typename InputQueueClass::Element *src) = 0;
-
-		virtual void process_one()
+		/* override */ void process_one()
 		{
 			unsigned int count;
 			typename InputQueueClass::Element *src;
@@ -39,10 +55,16 @@ namespace dyplo
 				if (count < blocksize)
 					return;
 				output->begin_write(dest, blocksize);
-				process_block(dest, src);
+				ProcessBlockFunction(dest, src);
 				output->end_write(blocksize);
 				input->end_read(blocksize);
 			}
+		}
+
+		/* override */ void interrupt()
+		{
+			if (output != NULL)
+				output->get_scheduler().interrupt();
 		}
 	};
 }
