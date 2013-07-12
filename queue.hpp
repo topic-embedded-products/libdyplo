@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdlib.h>
 #include <stdexcept>
 #include "generics.hpp"
 #include "scopedlock.hpp"
@@ -15,7 +14,7 @@ namespace dyplo
 
 		FixedMemoryQueue(unsigned int capacity, const Scheduler& scheduler = Scheduler()):
 			m_scheduler(scheduler),
-			m_buff((T*)calloc(capacity, sizeof(T))),
+			m_buff(new T[capacity]),
 			m_end(m_buff + capacity),
 			m_first(m_buff),
 			m_last(m_buff),
@@ -23,7 +22,7 @@ namespace dyplo
 		{}
 		~FixedMemoryQueue()
 		{
-			free(m_buff);
+			delete [] m_buff;
 		}
 
 		/* Return pointer to memory of "count" elements. Will block
