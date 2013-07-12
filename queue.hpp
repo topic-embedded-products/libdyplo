@@ -6,8 +6,7 @@
 
 namespace dyplo
 {
-
-	template <class T, class Scheduler> class FixedMemoryQueue //: public IQueue<T>
+	template <class T, class Scheduler> class FixedMemoryQueue
 	{
 	public:
 		typedef T Element;
@@ -140,4 +139,111 @@ namespace dyplo
 		unsigned int m_size;
 	};
 
+	/* A specialized queue that can only hold one element. */
+	template <class T, class Scheduler> class SingleElementQueue
+	{
+	public:
+		typedef T Element;
+
+		SingleElementQueue(const Scheduler& scheduler = Scheduler()):
+			m_scheduler(scheduler),
+			m_full(false)
+		{}
+
+		/* Return pointer to memory of "count" elements. Will block
+		* if no room in buffer for count_min items */
+		unsigned int begin_write(T* &buffer, unsigned int count_min)
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			if (count_min)
+				wait_until_not_full();
+			else if (m_full)
+				return 0; /* no room */
+			buffer = &m_buffer;
+			return 1;
+		}
+
+		/* Informs queue that data as issued by begin_write is
+		* now valid and can be processed by the next node. count
+		* may be less than previously requested. */
+		void end_write(unsigned int count)
+		{
+			DEBUG_ASSERT(count <= 1, "count must be <= 1");
+			if (count)
+			{
+				ScopedLock<Scheduler> lock(m_scheduler);
+				m_full = true;
+				m_scheduler.trigger_not_empty();
+			}
+		}
+
+		/* Return pointer to memory of count bytes. Blocks if
+		* no data available (someone must call end_write) */
+		unsigned int begin_read(T* &buffer, unsigned int count_min)
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			if (count_min)
+				wait_until_not_empty();
+			else if (!m_full)
+				return 0;
+			buffer = &m_buffer;
+			return 1;
+		}
+
+		/* Notify queue that count bytes have been consumed and
+		* that the buffer can be re-used for incoming data */
+		void end_read(unsigned int count)
+		{
+			DEBUG_ASSERT(count <= 1, "count must be <= 1");
+			if (count)
+			{
+				ScopedLock<Scheduler> lock(m_scheduler);
+				m_full = false;
+				m_scheduler.trigger_not_full();
+			}
+		}
+
+		unsigned int capacity() const { return 1; }
+		unsigned int size() const { return m_full ? 1 : 0; }
+		unsigned int available() const { return 1 - size(); }
+		bool empty() const { return !m_full; }
+		bool full() const { return m_full; }
+
+		void push_one(const T data)
+		{
+			T* buffer;
+			begin_write(buffer, 1);
+			*buffer = data;
+			end_write(1);
+		}
+
+		T pop_one()
+		{
+			T* buffer;
+			begin_read(buffer, 1);
+			T result = *buffer;
+			end_read(1);
+			return result;
+		}
+
+
+		Scheduler& get_scheduler() { return m_scheduler; }
+		const Scheduler& get_scheduler() const { return m_scheduler; }
+	protected:
+		void wait_until_not_full()
+		{
+			while (m_full)
+				m_scheduler.wait_until_not_full();
+		}
+
+		void wait_until_not_empty()
+		{
+			while (!m_full)
+				m_scheduler.wait_until_not_empty();
+		}
+
+		Scheduler m_scheduler;
+		T m_buffer;
+		bool m_full;
+	};
 }

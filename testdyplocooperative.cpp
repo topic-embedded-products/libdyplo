@@ -5,17 +5,17 @@
 
 #include "yaffut.h"
 
-template <class T, int blocksize> void process_block_add_one(T* dest, T* src)
+template <class TD, class TS, int blocksize> void process_block_add_one(TD* dest, TS* src)
 {
 	for (int i = 0; i < blocksize; ++i)
 		*dest++ = (*src++) + 1;
 }
 
-template <class T, class OutputQueue, int blocksize = 1>
+template <class InputQueue, class OutputQueue, int blocksize = 1>
 class AddOne: public dyplo::CooperativeProcess<
-	dyplo::FixedMemoryQueue<T, dyplo::CooperativeScheduler>,
+	InputQueue,
 	OutputQueue,
-	process_block_add_one<T, blocksize>,
+	process_block_add_one<typename OutputQueue::Element, typename InputQueue::Element, blocksize>,
 	blocksize>
 {
 };
@@ -23,10 +23,10 @@ class AddOne: public dyplo::CooperativeProcess<
 
 FUNC(fixed_memory_queue_cooperative_scheduler)
 {
-	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> input(1);
+	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> input;
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> output(2);
 
-	AddOne<int, dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler>, 1> proc;
+	AddOne<typeof(input), typeof(output), 1> proc;
 	proc.set_input(&input);
 	proc.set_output(&output);
 
@@ -45,7 +45,7 @@ FUNC(fixed_memory_queue_cooperative_scheduler_multi)
 	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> input(2);
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> output(2);
 
-	AddOne<int, dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler>, 2> proc;
+	AddOne<typeof(input), typeof(output), 2> proc;
 	proc.set_input(&input);
 	proc.set_output(&output);
 
@@ -65,12 +65,12 @@ FUNC(fixed_memory_queue_cooperative_scheduler_multi)
 
 FUNC(multiple_processes_and_queues)
 {
-	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> input_to_a(1);
-	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> between_a_and_b(1);
+	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> input_to_a;
+	dyplo::FixedMemoryQueue<short, dyplo::CooperativeScheduler> between_a_and_b(1);
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> output_from_b(2);
 
-	AddOne<int, dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> > a;
-	AddOne<int, dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> > b;
+	AddOne<typeof(input_to_a), typeof(between_a_and_b)> a;
+	AddOne<typeof(between_a_and_b), typeof(output_from_b)> b;
 
 	a.set_input(&input_to_a);
 	a.set_output(&between_a_and_b);
@@ -81,8 +81,8 @@ FUNC(multiple_processes_and_queues)
 	YAFFUT_EQUAL(52, output_from_b.pop_one());
 	input_to_a.push_one(51);
 	YAFFUT_EQUAL(53, output_from_b.pop_one());
-	input_to_a.push_one(52);
-	YAFFUT_EQUAL(54, output_from_b.pop_one());
+	input_to_a.push_one(32767); /* Cause overflow in short */
+	YAFFUT_EQUAL(-32767, output_from_b.pop_one());
 
 	YAFFUT_EQUAL(0, input_to_a.size());
 	YAFFUT_EQUAL(0, between_a_and_b.size());
