@@ -115,8 +115,8 @@ FUNC(threading_and_cooperative_mix)
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_c(2);
 
 	AddFiveTQTPCQ<int> proc_a;
-	AddTwoCQCP<int, dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> > proc_b;
-	AddTwoCQCP<int, dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> > proc_c;
+	AddTwoCQCP<int, typeof(output_from_b) > proc_b;
+	AddTwoCQCP<int, typeof(output_from_c) > proc_c;
 
 	proc_a.set_input(&input_to_a);
 	proc_a.set_output(&output_from_a);
@@ -143,8 +143,8 @@ FUNC(threading_and_cooperative_mix_block_output)
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_c(2);
 
 	AddFiveTQTPCQ<int> proc_a;
-	AddTwoCQCP<int, dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> > proc_b;
-	AddTwoCQCP<int, dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> > proc_c;
+	AddTwoCQCP<int, typeof(output_from_b) > proc_b;
+	AddTwoCQCP<int, typeof(output_from_c) > proc_c;
 
 	proc_a.set_input(&input_to_a);
 	proc_a.set_output(&output_from_a);

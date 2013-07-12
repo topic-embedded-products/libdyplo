@@ -20,11 +20,10 @@ class AddOne: public dyplo::CooperativeProcess<
 {
 };
 
-
-FUNC(fixed_memory_queue_cooperative_scheduler)
+FUNC(single_element_queue_cooperative_scheduler)
 {
 	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> input;
-	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> output(2);
+	dyplo::SingleElementQueue<int, dyplo::NoopScheduler> output;
 
 	AddOne<typeof(input), typeof(output), 1> proc;
 	proc.set_input(&input);
