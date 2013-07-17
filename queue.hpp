@@ -214,6 +214,12 @@ namespace dyplo
 			}
 		}
 
+		void wait_empty()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			wait_until_not_full();
+		}
+
 		unsigned int capacity() const { return 1; }
 		unsigned int size() const { return m_full ? 1 : 0; }
 		unsigned int available() const { return 1 - size(); }

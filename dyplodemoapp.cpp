@@ -6,6 +6,11 @@
 #include "cooperativeprocess.hpp"
 #include "thread.hpp"
 
+/*
+ * Setup the following queue:
+ * stdin -> (T) -> string_to_int -> (T) -> Add_5 -> (C) -> int_to_string -> (T) -> stdout
+ */
+
 template <class T, int raise, int blocksize> void process_block_add_constant(T* dest, T* src)
 {
 	for (int i = 0; i < blocksize; ++i)
@@ -100,7 +105,7 @@ int main(int argc, char** argv)
 {
 	dyplo::FixedMemoryQueue<std::string, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(2);
-	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_b(2);
+	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> output_from_b;
 	dyplo::FixedMemoryQueue<std::string, dyplo::PthreadScheduler> output_from_c(2);
 
 
@@ -114,7 +119,7 @@ int main(int argc, char** argv)
 		process_block_add_constant<int, 5, 1>
 		> proc_b;
 
-	dyplo::ThreadedProcess<
+	dyplo::CooperativeProcess<
 		typeof(output_from_b), typeof(output_from_c),
 		process_int_to_string,
 		1 /*blocksize*/ > proc_c;
@@ -132,10 +137,12 @@ int main(int argc, char** argv)
 	proc_b.set_output(&output_from_b);
 	proc_d.set_input(&output_from_c);
 	
-	while (!std::cin.eof())
+	for(;;)
 	{
 		std::string line;
 		std::cin >> line;
+		if (std::cin.eof())
+			break;
 		input_to_a.push_one(line);
 	}
 	input_to_a.wait_empty();
