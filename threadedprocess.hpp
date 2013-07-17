@@ -7,7 +7,7 @@
 namespace dyplo
 {
 	template <class InputQueueClass, class OutputQueueClass,
-		void(*ProcessBlockFunction)(typename InputQueueClass::Element*, typename OutputQueueClass::Element*),
+		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
 		int blocksize = 1>
 	class ThreadedProcess
 	{
@@ -47,10 +47,6 @@ namespace dyplo
 			output = value;
 			if (input && output)
 				start();
-		}
-
-		void set_process_block_function(void (*routine) (OutputElement *dest, InputElement *src))
-		{
 		}
 
 		void* process()

@@ -80,6 +80,17 @@ namespace dyplo
 			m_size -= count;
 			m_scheduler.trigger_not_full();
 		}
+		
+		void wait_empty()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			for(;;)
+			{
+				if (empty())
+					return;
+				m_scheduler.wait_until_not_full();
+			}
+		}
 
 		unsigned int capacity() const { return m_end - m_buff; }
 		unsigned int size() const { return m_size; }

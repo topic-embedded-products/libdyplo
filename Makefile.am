@@ -23,7 +23,7 @@ libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
 dyplo_libincludedir = $(includedir)/dyplo
 
 TESTS = testdyplo
-bin_PROGRAMS = $(TESTS)
+bin_PROGRAMS = $(TESTS) dyplodemoapp
 
 testdyplo_SOURCES = yaffut.h \
 	testdyplomain.cpp \
@@ -31,3 +31,4 @@ testdyplo_SOURCES = yaffut.h \
 	testdyplocooperative.cpp \
 	testdyplothreaded.cpp
 testdyplo_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
+dyplodemoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
