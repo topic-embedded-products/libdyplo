@@ -1,6 +1,8 @@
+#include <unistd.h>
 #include <string>
 #include "queue.hpp"
 #include "noopscheduler.hpp"
+#include "filequeue.hpp"
 
 #include "yaffut.h"
 
@@ -159,4 +161,59 @@ FUNC(a_queue_with_custom_class)
 	}
 	YAFFUT_EQUAL(1, Storage::assignment_count);
 	YAFFUT_EQUAL(0, Storage::instances_alive_count);
+}
+
+struct Pipe
+{
+	int m_handles[2];
+	Pipe()
+	{
+		int result = ::pipe(m_handles);
+		if (result != 0)
+			throw std::runtime_error("Failed to create pipe");
+	}
+	~Pipe()
+	{
+		::close(m_handles[0]);
+		::close(m_handles[1]);
+	}
+	int read_handle() const { return m_handles[0]; }
+	int write_handle() const { return m_handles[1]; }
+};
+
+FUNC(a_file_queue)
+{
+	Pipe p;
+	dyplo::FileOutputQueue<int> output(p.write_handle(), 10);
+	dyplo::FileInputQueue<int> input(p.read_handle(), 5);
+	int* data = NULL;
+	unsigned int count;
+
+	count = output.begin_write(data, 1);
+	YAFFUT_EQUAL(10, count);
+	YAFFUT_CHECK(data != NULL);
+	for (int i = 0; i < 10; ++i)
+		data[i] = i * 10;
+	output.end_write(10);
+	
+	count = input.begin_read(data, 5);
+	YAFFUT_EQUAL(5, count);
+	YAFFUT_CHECK(data != NULL);
+	for (int i = 0; i < 5; ++i)
+		YAFFUT_EQUAL(i * 10, data[i]);
+	input.end_read(3); /* Only take 3 items from the queue */
+
+	count = input.begin_read(data, 5);
+	YAFFUT_EQUAL(5, count);
+	YAFFUT_CHECK(data != NULL);
+	for (int i = 0; i < 5; ++i)
+		YAFFUT_EQUAL(30 + i * 10, data[i]);
+	input.end_read(5);
+
+	count = input.begin_read(data, 2);
+	YAFFUT_EQUAL(2, count);
+	YAFFUT_CHECK(data != NULL);
+	for (int i = 0; i < 2; ++i)
+		YAFFUT_EQUAL(80 + i * 10, data[i]);
+	input.end_read(2);
 }

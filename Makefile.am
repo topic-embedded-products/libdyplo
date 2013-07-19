@@ -9,6 +9,7 @@ dyplo_libinclude_HEADERS = \
     mutex.hpp \
     thread.hpp \
     queue.hpp \
+    filequeue.hpp \
     scopedlock.hpp \
     noopscheduler.hpp \
     cooperativescheduler.hpp \
