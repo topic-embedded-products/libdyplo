@@ -1,0 +1,8 @@
+To start GDB:
+
+libtool --mode=execute gdb testdyplo
+
+Get a stack trace of all threads in GDB:
+
+thread apply all bt
+

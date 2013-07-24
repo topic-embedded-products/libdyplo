@@ -163,29 +163,12 @@ FUNC(a_queue_with_custom_class)
 	YAFFUT_EQUAL(0, Storage::instances_alive_count);
 }
 
-struct Pipe
-{
-	int m_handles[2];
-	Pipe()
-	{
-		int result = ::pipe(m_handles);
-		if (result != 0)
-			throw std::runtime_error("Failed to create pipe");
-	}
-	~Pipe()
-	{
-		::close(m_handles[0]);
-		::close(m_handles[1]);
-	}
-	int read_handle() const { return m_handles[0]; }
-	int write_handle() const { return m_handles[1]; }
-};
-
 FUNC(a_file_queue)
 {
-	Pipe p;
-	dyplo::FileOutputQueue<int> output(p.write_handle(), 10);
-	dyplo::FileInputQueue<int> input(p.read_handle(), 5);
+	dyplo::Pipe p;
+	dyplo::FilePollScheduler scheduler;
+	dyplo::FileOutputQueue<int> output(scheduler, p.write_handle(), 10);
+	dyplo::FileInputQueue<int> input(scheduler, p.read_handle(), 5);
 	int* data = NULL;
 	unsigned int count;
 
@@ -216,4 +199,52 @@ FUNC(a_file_queue)
 	for (int i = 0; i < 2; ++i)
 		YAFFUT_EQUAL(80 + i * 10, data[i]);
 	input.end_read(2);
+}
+
+FUNC(a_file_queue_non_blocking)
+{
+	dyplo::Pipe p;
+	dyplo::FilePollScheduler scheduler;
+	dyplo::FileOutputQueue<int> output(scheduler, p.write_handle(), 10);
+	dyplo::FileInputQueue<int> input(scheduler, p.read_handle(), 10);
+	int* data = NULL;
+	unsigned int count;
+
+	count = output.begin_write(data, 1);
+	YAFFUT_EQUAL(10, count);
+	YAFFUT_CHECK(data != NULL);
+	for (int i = 0; i < 10; ++i)
+		data[i] = i * 10;
+	output.end_write(10);
+
+	count = input.begin_read(data, 5);
+	YAFFUT_EQUAL(10, count); /* Should read more than requested */
+	input.end_read(count);
+	
+	int written = 0;
+	while(true)
+	{
+		/* Wait until write would block on the OS fifo */
+		count = output.begin_write(data, 0);
+		if (count < 10)
+			break;
+		YAFFUT_EQUAL(10, count);
+		output.end_write(10);
+		written += 10;
+	}
+	while (written > 10)
+	{
+		/* Empty the OS fifo */
+		count = input.begin_read(data, 10);
+		if (count == 0)
+			break;
+		input.end_read(count);
+		written -= count;
+	}
+	YAFFUT_CHECK(written <= 10);
+	/* There must be room in the OS fifo again */
+	count = output.begin_write(data, 0);
+	YAFFUT_CHECK(count > 0);
+	count = input.begin_read(data, 10);
+	YAFFUT_CHECK(count > 0);
 }

@@ -161,3 +161,35 @@ FUNC(threading_and_cooperative_mix_block_output)
   	input_to_a.push_one(53);
   	input_to_a.push_one(54); /* blocks on output */
 }
+
+#include "filequeue.hpp"
+
+FUNC(file_queue_in_chain)
+{
+	/* Q -> P -> Q -> "file" -> Q -> P -> ... */
+	dyplo::Pipe p;
+	dyplo::FilePollScheduler file_scheduler;
+	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> input_to_p1;
+	dyplo::FileOutputQueue<int> output_to_file(file_scheduler, p.write_handle(), 10);
+	dyplo::FileInputQueue<int> input_from_file(file_scheduler, p.read_handle(), 10);
+	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_p2(10);
+
+	dyplo::CooperativeProcess<
+		typeof(input_to_p1), typeof(output_to_file),
+		process_block_add_constant<int, 2, 1>,
+		1> p1;
+	dyplo::ThreadedProcess<
+		typeof(input_from_file), typeof(output_from_p2),
+		process_block_add_constant<int, 7, 1> 
+		> p2;
+	
+	p1.set_input(&input_to_p1);
+	p1.set_output(&output_to_file);
+	p2.set_input(&input_from_file);
+	p2.set_output(&output_from_p2);
+	
+	input_to_p1.push_one(10);
+	input_to_p1.push_one(20);
+	YAFFUT_EQUAL(19, output_from_p2.pop_one());
+	YAFFUT_EQUAL(29, output_from_p2.pop_one());
+}

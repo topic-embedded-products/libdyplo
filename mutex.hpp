@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdexcept>
 #include <pthread.h>
 
 namespace dyplo

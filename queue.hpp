@@ -58,7 +58,6 @@ namespace dyplo
 		{
 			ScopedLock<Scheduler> lock(m_scheduler);
 			wait_until_not_empty(count_min);
-
 			buffer = m_last;
 			unsigned int result;
 			if (m_first > m_last)

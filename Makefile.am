@@ -5,6 +5,7 @@ AM_DEFAULT_SOURCE_EXT = .cpp
 lib_LTLIBRARIES = libdyplo.la
 dyplo_libinclude_HEADERS = \
     generics.hpp \
+    exceptions.hpp \
     condition.hpp \
     mutex.hpp \
     thread.hpp \
@@ -19,6 +20,7 @@ dyplo_libinclude_HEADERS = \
 libdyplo_la_SOURCES = \
     noopscheduler.cpp \
     pthreadscheduler.cpp \
+    filequeue.cpp \
     $(dyplo_libinclude_HEADERS)
 libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
 dyplo_libincludedir = $(includedir)/dyplo

@@ -16,14 +16,14 @@ namespace dyplo
 		}
 
 		/* Having empty lock/unlock methods will cause the whole locking to be optimized away */
-		void lock()
+		void lock() const
 		{
 		}
-		void unlock()
+		void unlock() const
 		{
 		}
 
-		void interrupt()
+		void interrupt() const
 		{
 		}
 	};

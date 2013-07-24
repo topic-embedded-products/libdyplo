@@ -1,16 +1,11 @@
 #pragma once
 
-#include <stdexcept>
 #include "mutex.hpp"
 #include "condition.hpp"
+#include "exceptions.hpp"
 
 namespace dyplo
 {
-	class InterruptedException: public std::exception
-	{
-		virtual const char* what() const throw();
-	};
-
 	class PthreadScheduler
 	{
 	protected:
