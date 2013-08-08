@@ -4,6 +4,29 @@
 
 namespace dyplo
 {
+	const char* EndOfFileException::what() const throw()
+	{
+		return "End of file";
+	}
+	const char* EndOfInputException::what() const throw()
+	{
+		return "End of input file";
+	}
+	const char* EndOfOutputException::what() const throw()
+	{
+		return "End of output file";
+	}
+	
+	IOException::IOException():
+		m_errno(errno)
+	{
+	}
+
+	const char* IOException::what() const throw()
+	{
+		return strerror(m_errno);
+	}
+	
 	int set_non_blocking(int file_handle)
 	{
 		int flags = fcntl(file_handle, F_GETFL, 0);
@@ -36,6 +59,7 @@ namespace dyplo
 	{
 		char dummy = 'q';
 		m_interrupted = true;
-		::write(m_internal_pipe.write_handle(), &dummy, 1);
+		if (::write(m_internal_pipe.write_handle(), &dummy, 1) < 0)
+			throw IOException();
 	}
 }

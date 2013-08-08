@@ -4,6 +4,7 @@
 
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 #include "generics.hpp"
 #include "exceptions.hpp"
 #include "scopedlock.hpp"
@@ -181,7 +182,7 @@ namespace dyplo
 						throw std::runtime_error("Failed to read file");
 				}
 				else if (result == 0)
-					throw std::runtime_error("End of file");
+					throw EndOfInputException();
 				else
 				{
 					bytes_to_read -= result;
