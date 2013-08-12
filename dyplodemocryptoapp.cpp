@@ -1,5 +1,10 @@
 #include <iostream>
 #include <sstream>
+#include <stdio.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "cooperativescheduler.hpp"
 #include "cooperativeprocess.hpp"
@@ -54,9 +59,29 @@ protected:
 
 int main(int argc, char** argv)
 {
+	int fd_in = 0;
+	int fd_out = 1;
+	if (argc > 1)
+	{
+		fd_in = open(argv[1], O_RDONLY);
+		if (fd_in == -1)
+		{
+			perror("Failed to open input file");
+			return 1;
+		}
+		if (argc > 2)
+		{
+			fd_out = open(argv[2], O_WRONLY);
+			if (fd_out == -1)
+			{
+				perror("Failed to open output file");
+				return 1;
+			}
+		}
+	}
 	try
 	{
-		Crypto crypto(0, 1);
+		Crypto crypto(fd_in, fd_out);
 		crypto.process();
 	}
 	catch (const std::exception& ex)
