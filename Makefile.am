@@ -26,7 +26,7 @@ libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
 dyplo_libincludedir = $(includedir)/dyplo
 
 TESTS = testdyplo
-bin_PROGRAMS = $(TESTS) dyplodemoapp dyplodemocryptoapp
+bin_PROGRAMS = $(TESTS) testdyplodriver dyplodemoapp dyplodemocryptoapp
 
 testdyplo_SOURCES = yaffut.h \
 	testdyplomain.cpp \
@@ -35,5 +35,7 @@ testdyplo_SOURCES = yaffut.h \
 	testdyplothreaded.cpp \
 	testdyplosolver.cpp
 testdyplo_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
+testdyplodriver_LDADD = libdyplo.la
 dyplodemoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
-dyplodemocryptoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
+dyplodemocryptoapp_LDADD = libdyplo.la
+

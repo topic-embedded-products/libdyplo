@@ -1,5 +1,3 @@
-#pragma once
-
 #include "noopscheduler.hpp"
 #include <stdexcept>
 
