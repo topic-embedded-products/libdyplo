@@ -35,7 +35,7 @@ testdyplo_SOURCES = yaffut.h \
 	testdyplothreaded.cpp \
 	testdyplosolver.cpp
 testdyplo_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
-testdyplodriver_LDADD = libdyplo.la
+testdyplodriver_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 dyplodemoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 dyplodemocryptoapp_LDADD = libdyplo.la
 
