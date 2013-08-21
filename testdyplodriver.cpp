@@ -140,6 +140,17 @@ FUNC(hardware_driver_c_fifo_single_open_rw_access)
 	ASSERT_THROW(File w0r("/dev/dyplow0", O_RDONLY), dyplo::IOException);
 }
 
+static void connect_all_fifos_in_loop()
+{
+	File ctrl(DRIVER_CONTROL);
+	unsigned int routes[32];
+	struct dyplo_route_t route_table = {32, routes};
+	for (int i = 0; i < 32; ++i)
+		routes[i] = (i << 16) | (i << 0);
+	/* TODO: Send to driver (and verify?) */
+	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCSROUTE, &route_table));
+}
+
 FUNC(hardware_driver_d_io_control)
 {
 	File ctrl(DRIVER_CONTROL);
@@ -147,28 +158,21 @@ FUNC(hardware_driver_d_io_control)
 	EQUAL(-1, ioctl(ctrl.handle, 0x12345678));
 	EQUAL(ENOTTY, errno);
 	/* Set up route */
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCTROUTE, 0x00200020)); /* Should be: fifo 1[0] -> fifo 1[0] */
+	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCTROUTE, 0x00000000)); /* Should be: fifo 0[0] -> fifo 0[0] */
 	struct dyplo_route_t routes;
 	routes.n_routes = 10;
-	routes.proutes = new unsigned int [10];
+	routes.proutes = new unsigned int [64];
 	int n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
 	CHECK(n_routes > 0);
-	/* TODO: Driver/hardware doesn't really work yet
-	EQUAL(1, n_routes);
-	EQUAL(0x00200020, routes.proutes[0]);
-	*/
-}
-
-static void connect_all_fifos_in_loop()
-{
-	File ctrl(DRIVER_CONTROL);
-	unsigned int routes[32];
-	struct dyplo_route_t route_table = {32, routes};
-	for (int i = 0; i < 32; ++i)
-		routes[i] = (i << 21) | (i << 5);
-	/* TODO: Send to driver (and verify?)
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCSROUTE, &route_table));
-	*/
+	/* TODO: Driver/hardware doesn't really work yet */
+	//EQUAL(0x00200020, routes.proutes[0]);
+	connect_all_fifos_in_loop();
+	routes.n_routes = 64;
+	n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
+	CHECK(n_routes >= 32);
+	for (int fifo=0; fifo<32; ++fifo)
+		EQUAL((fifo << 21) | (fifo << 5), routes.proutes[fifo]);
+	delete [] routes.proutes;
 }
 
 FUNC(hardware_driver_e_transmit_loop)
