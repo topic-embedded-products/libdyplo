@@ -19,6 +19,7 @@ struct dyplo_route_t  {
 	unsigned int* proutes;
 };
 #define DYPLO_IOC_MAGIC	'd'
+#define DYPLO_IOC_ROUTE_CLEAR	0x00
 #define DYPLO_IOC_ROUTE_SET	0x01
 #define DYPLO_IOC_ROUTE_GET	0x02
 #define DYPLO_IOC_ROUTE_TELL	0x03
@@ -26,6 +27,7 @@ struct dyplo_route_t  {
  * T means "Tell", sets directly
  * G means "Get" through a ptr
  * Q means "Query", return value */
+#define DYPLO_IOCROUTE_CLEAR	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_CLEAR)
 #define DYPLO_IOCSROUTE   _IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_SET, struct dyplo_route_t)
 #define DYPLO_IOCGROUTE   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_GET, struct dyplo_route_t)
 #define DYPLO_IOCTROUTE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL)
@@ -123,9 +125,9 @@ FUNC(hardware_driver_b_config_single_open)
 	/* But cannot open it twice either */
 	ASSERT_THROW(File another_cfg0w("/dev/dyplocfg0", O_WRONLY), dyplo::IOException);
 	/* Open for both R/W */
-	File cfg3rw("/dev/dyplocfg3", O_RDWR);
-	ASSERT_THROW(File another_cfg3rw("/dev/dyplocfg3", O_RDONLY), dyplo::IOException);
-	ASSERT_THROW(File another_cfg3rw("/dev/dyplocfg3", O_WRONLY), dyplo::IOException);
+	File cfg3rw("/dev/dyplocfg2", O_RDWR);
+	ASSERT_THROW(File another_cfg3rw("/dev/dyplocfg2", O_RDONLY), dyplo::IOException);
+	ASSERT_THROW(File another_cfg3rw("/dev/dyplocfg2", O_WRONLY), dyplo::IOException);
 }
 
 FUNC(hardware_driver_c_fifo_single_open_rw_access)
@@ -153,25 +155,29 @@ static void connect_all_fifos_in_loop()
 
 FUNC(hardware_driver_d_io_control)
 {
+	struct dyplo_route_t routes;
+	routes.n_routes = 10;
+	routes.proutes = new unsigned int [64];
 	File ctrl(DRIVER_CONTROL);
 	/* Invalid ioctl, must fail */
 	EQUAL(-1, ioctl(ctrl.handle, 0x12345678));
 	EQUAL(ENOTTY, errno);
-	/* Set up route */
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCTROUTE, 0x00000000)); /* Should be: fifo 0[0] -> fifo 0[0] */
-	struct dyplo_route_t routes;
-	routes.n_routes = 10;
-	routes.proutes = new unsigned int [64];
+	/* Clean all routes */
+	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCROUTE_CLEAR));
 	int n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
-	CHECK(n_routes > 0);
-	/* TODO: Driver/hardware doesn't really work yet */
-	//EQUAL(0x00200020, routes.proutes[0]);
+	EQUAL(n_routes, 0);
+	/* Set up single route */
+	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCTROUTE, 0x00000000)); /* Should be: fifo 0[0] -> fifo 0[0] */
+	n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
+	EQUAL(1, n_routes);
+	EQUAL(0x00000000, routes.proutes[0]);
+	/* Setup loopback system (1->0, 1->1 etc) */
 	connect_all_fifos_in_loop();
 	routes.n_routes = 64;
 	n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
-	CHECK(n_routes >= 32);
+	EQUAL(32, n_routes);
 	for (int fifo=0; fifo<32; ++fifo)
-		EQUAL((fifo << 21) | (fifo << 5), routes.proutes[fifo]);
+		EQUAL((fifo << 16) | (fifo << 0), routes.proutes[fifo]);
 	delete [] routes.proutes;
 }
 
@@ -201,20 +207,21 @@ FUNC(hardware_driver_e_transmit_loop)
 	}
 }
 
-ssize_t fill_fifo_to_the_brim(File &fifo_out)
+ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
 {
+	const int blocksize = 1024;
 	/* Fill it until it is full */
 	int max_repeats = 100;
-	int* buffer = new int[1024];
+	int* buffer = new int[blocksize];
 	ssize_t total_written = 0;
 	
 	while (--max_repeats)
 	{
-		for (int i = 0; i < 1024; ++i)
-			buffer[i] = (total_written >> 2) + i;
-		ssize_t written = fifo_out.write(buffer, 1024*sizeof(buffer[0]));
+		for (int i = 0; i < blocksize; ++i)
+			buffer[i] = ((total_written >> 2) + i) + signature;
+		ssize_t written = fifo_out.write(buffer, blocksize*sizeof(buffer[0]));
 		total_written += written;
-		if (written < 1024*sizeof(buffer[0]))
+		if (written < blocksize*sizeof(buffer[0]))
 			break;
 	}
 	delete [] buffer;
@@ -228,7 +235,7 @@ void hardware_driver_poll_single(int fifo)
 {
 	File fifo_in(fifo, O_RDONLY);
 	File fifo_out(fifo, O_WRONLY);
-	
+	const int signature = 10000000 * (fifo+1);
 	int data = 42;
 	
 	/* Nothing to read yet */
@@ -253,8 +260,13 @@ void hardware_driver_poll_single(int fifo)
 	/* Set output fifo in non-blocking mode */
 	EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 
-	ssize_t total_written = fill_fifo_to_the_brim(fifo_out);
+	ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature);
 	CHECK(total_written > 0);
+	/* The write fifo holds 255 words, the read fifo 1023. So in total,
+	 * the fifo's cannot contain more than 5k bytes. If the total number
+	 * of bytes is more, it means something goofed up, or the fifo's are
+	 * bigger than before this test was written */
+	CHECK(total_written < 6000);
 
 	/* Status must indicate that there is no room */
 	CHECK(! fifo_out.poll_for_outgoing_data(0));
@@ -265,10 +277,19 @@ void hardware_driver_poll_single(int fifo)
 
 	while (total_read < total_written)
 	{
-		ssize_t bytes_read = fifo_in.read(buffer, 1024*sizeof(buffer[0]));
+		ssize_t bytes_read;
+		try {
+			bytes_read = fifo_in.read(buffer, 1024*sizeof(buffer[0]));
+		}
+		catch (const dyplo::IOException& ex)
+		{
+			/* Handle EAGAIN errors by waiting for more */
+			CHECK(fifo_in.poll_for_incoming_data(1));
+			continue;
+		}
 		const ssize_t ints_read = bytes_read >> 2;
 		for (int i = 0; i < ints_read; ++i) {
-			EQUAL((total_read >> 2) + i, buffer[i]);
+			EQUAL((total_read >> 2) + i + signature, buffer[i]);
 		}
 		total_read += bytes_read;
 	}
@@ -287,7 +308,18 @@ FUNC(hardware_driver_f_poll)
 {
 	connect_all_fifos_in_loop();
 	for (int i = 0; i < 32; ++i)
-		hardware_driver_poll_single(i);
+	{
+		try
+		{
+			hardware_driver_poll_single(i);
+		}
+		catch (const dyplo::IOException& ex)
+		{
+			std::ostringstream msg;
+			msg << "IOException while testing fifo " << i << ": " << ex.what();
+			FAIL(msg.str());
+		}
+	}
 }
 
 struct FileContext
@@ -434,7 +466,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	writer.start(thread_write_data, &ctx);
 	ctx.wait(); /* Block until we're calling "write" on the other thread*/
 	ssize_t total_read = 0;
-	int buffer[64];
+	int buffer[256];
 	ssize_t bytes = fifo_in.read(buffer, sizeof(buffer));
 	for (int i = 0; i < (bytes>>2); ++i)
 		EQUAL(buffer[i], (total_read>>2) + i);
