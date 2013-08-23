@@ -415,11 +415,8 @@ void hardware_driver_irq_driven_read_single(int fifo)
 FUNC(hardware_driver_g_irq_driven_read)
 {
 	connect_all_fifos_in_loop();
-	hardware_driver_irq_driven_read_single(1);
-	hardware_driver_irq_driven_read_single(5);
-	hardware_driver_irq_driven_read_single(19);
-	hardware_driver_irq_driven_read_single(25);
-	hardware_driver_irq_driven_read_single(31);
+	for (int fifo = 31; fifo >= 0; --fifo) /* go back, variation */
+		hardware_driver_irq_driven_read_single(fifo);
 	check_all_input_fifos_are_empty();
 }
 
@@ -500,10 +497,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 FUNC(hardware_driver_h_irq_driven_write)
 {
 	connect_all_fifos_in_loop();
-	hardware_driver_irq_driven_write_single(9);
-	hardware_driver_irq_driven_write_single(11);
-	hardware_driver_irq_driven_write_single(16);
-	hardware_driver_irq_driven_write_single(17);
-	hardware_driver_irq_driven_write_single(18);
+	for (int fifo = 0; fifo < 32; ++fifo)
+		hardware_driver_irq_driven_write_single(fifo);
 	check_all_input_fifos_are_empty();
 }
