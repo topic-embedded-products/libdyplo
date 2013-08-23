@@ -478,7 +478,12 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	/* Drain the buffer */
 	while (total_read < total_written)
 	{
-		bytes = fifo_in.read(buffer, sizeof(buffer));
+		int bytes_to_read;
+		if (total_written - total_read > sizeof(buffer))
+			bytes_to_read = sizeof(buffer);
+		else
+			bytes_to_read = total_written - total_read;
+		bytes = fifo_in.read(buffer, bytes_to_read);
 		CHECK(bytes > 0);
 		for (int i = 0; i < (bytes>>2); ++i)
 			EQUAL(buffer[i], (total_read>>2) + i);
