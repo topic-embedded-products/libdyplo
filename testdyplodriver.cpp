@@ -501,3 +501,33 @@ FUNC(hardware_driver_h_irq_driven_write)
 		hardware_driver_irq_driven_write_single(fifo);
 	check_all_input_fifos_are_empty();
 }
+
+static void hardware_driver_i_hdl_block_processing()
+{
+	static unsigned int routes[] = {
+		0x00000020, /* Fifo 0 to HDL #1 port 0 */
+		0x00200000, /* HDL Output 0 to FIFO 0 */
+		0x00010040, /* HDL #2 connected to fifo 1 */
+		0x00400001, /* and output to fifo 1 */
+	};
+	static struct dyplo_route_t route_table = {
+			sizeof(routes)/sizeof(routes[0]), routes};
+	File ctrl(DRIVER_CONTROL);
+	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCSROUTE, &route_table));
+	int data[] = {1, 2, 42000, -42000};
+	const size_t data_size = sizeof(data)/sizeof(data[0]);
+	for (int fifo = 0; fifo < 2; ++fifo)
+	{
+		File hdl_in(fifo, O_WRONLY);
+		File hdl_out(fifo, O_RDONLY);
+		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
+		EQUAL(sizeof(data), bytes_written);
+		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
+		int buffer[data_size];
+		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
+		EQUAL(sizeof(buffer), bytes_read);
+		for (int i=0; i < data_size; ++i)
+			EQUAL(data[i], buffer[i]);
+	}
+	check_all_input_fifos_are_empty();
+}
