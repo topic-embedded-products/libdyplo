@@ -1,9 +1,7 @@
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
-#include <fcntl.h>
 #include <errno.h>
-#include "exceptions.hpp"
+#include "fileio.hpp"
 #include "filequeue.hpp"
 #include "thread.hpp"
 #include "condition.hpp"
@@ -35,79 +33,21 @@ struct dyplo_route_t  {
 
 const char DRIVER_CONTROL[] = "/dev/dyploctl";
 
-class File
-{
-public:
-	int handle;
-	File(const char* filename, int access = O_RDONLY):
-		handle(::open(filename, access))
-	{
-		if (handle == -1)
-			throw dyplo::IOException();
-	}
-	File(int fifo, int access)
-	{		
-		std::ostringstream name;
-		if (access == O_RDONLY)
-			name << "/dev/dyplor";
-		else if (access == O_WRONLY)
-			name << "/dev/dyplow";
-		else
-			FAIL("bad access");
-		name << fifo;
-		handle = ::open(name.str().c_str(), access);
-		if (handle == -1)
-			throw dyplo::IOException();
-	}
-	~File()
-	{
-		::close(handle);
-	}
+using dyplo::File;
 
-	ssize_t write(const void *buf, size_t count)
-	{
-		ssize_t result = ::write(handle, buf, count);
-		if (result < 0)
-			throw dyplo::IOException();
-		return result;
-	}
+static int openFifo(int fifo, int access)
+{		
+	std::ostringstream name;
+	if (access == O_RDONLY)
+		name << "/dev/dyplor";
+	else if (access == O_WRONLY)
+		name << "/dev/dyplow";
+	else
+		FAIL("bad access");
+	name << fifo;
+	return ::open(name.str().c_str(), access);
+}
 
-	ssize_t read(void *buf, size_t count)
-	{
-		ssize_t result = ::read(handle, buf, count);
-		if (result < 0)
-			throw dyplo::IOException();
-		return result;
-	}
-	
-	bool poll_for_incoming_data(int timeout_in_seconds)
-	{
-		struct timeval timeout;
-		fd_set fds;
-		FD_ZERO(&fds);
-		FD_SET(handle, &fds);
-		timeout.tv_sec = timeout_in_seconds;
-		timeout.tv_usec = 0;
-		int status = select(handle+1, &fds, NULL, NULL, &timeout);
-		if (status < 0)
-			throw dyplo::IOException();
-		return status && FD_ISSET(handle, &fds);
-	}
-
-	bool poll_for_outgoing_data(int timeout_in_seconds)
-	{
-		struct timeval timeout;
-		fd_set fds;
-		FD_ZERO(&fds);
-		FD_SET(handle, &fds);
-		timeout.tv_sec = timeout_in_seconds;
-		timeout.tv_usec = 0;
-		int status = select(handle+1, NULL, &fds, NULL, &timeout);
-		if (status < 0)
-			throw dyplo::IOException();
-		return status && FD_ISSET(handle, &fds);
-	}
-};
 
 FUNC(hardware_driver_a_control_multiple_open)
 {
@@ -186,8 +126,8 @@ FUNC(hardware_driver_e_transmit_loop)
 	connect_all_fifos_in_loop();
 	for (int fifo=0; fifo<32; ++fifo)
 	{
-		File fifo_in(fifo, O_RDONLY);
-		File fifo_out(fifo, O_WRONLY);
+		File fifo_in(openFifo(fifo, O_RDONLY));
+		File fifo_out(openFifo(fifo, O_WRONLY));
 		/* Future todo: Set up routing... */
 		/* Assert that input is empty */
 		CHECK(! fifo_in.poll_for_incoming_data(0) );
@@ -233,8 +173,8 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
 
 void hardware_driver_poll_single(int fifo)
 {
-	File fifo_in(fifo, O_RDONLY);
-	File fifo_out(fifo, O_WRONLY);
+	File fifo_in(openFifo(fifo, O_RDONLY));
+	File fifo_out(openFifo(fifo, O_WRONLY));
 	const int signature = 10000000 * (fifo+1);
 	int data = 42;
 	
@@ -370,7 +310,7 @@ void check_all_input_fifos_are_empty()
 	std::ostringstream msg;
 	for (int fifo = 0; fifo < 32; ++fifo)
 	{
-		File fifo_in(fifo, O_RDONLY);
+		File fifo_in(openFifo(fifo, O_RDONLY));
 		
 		if (fifo_in.poll_for_incoming_data(0))
 		{
@@ -400,8 +340,8 @@ void hardware_driver_irq_driven_read_single(int fifo)
 {
 	dyplo::Thread reader;
 	
-	File fifo_in(fifo, O_RDONLY);
-	File fifo_out(fifo, O_WRONLY);
+	File fifo_in(openFifo(fifo, O_RDONLY));
+	File fifo_out(openFifo(fifo, O_WRONLY));
 	FileContext ctx(&fifo_in);
 	reader.start(thread_read_data, &ctx);
 	ctx.wait(); /* Block until we're calling "read" on the other thread*/
@@ -444,7 +384,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	ssize_t total_written;
 	{
 		/* Make it so that the pipe is filled to the brim */
-		File fifo_out(fifo, O_WRONLY);
+		File fifo_out(openFifo(fifo, O_WRONLY));
 		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 		CHECK(fifo_out.poll_for_outgoing_data(0)); /* Must have room */
 		/* Fill it until it is full */
@@ -455,8 +395,8 @@ void hardware_driver_irq_driven_write_single(int fifo)
 		/* Close and re-open the output to clear the "non-blocking" flag */
 	}
 
-	File fifo_in(fifo, O_RDONLY);
-	File fifo_out(fifo, O_WRONLY);
+	File fifo_in(openFifo(fifo, O_RDONLY));
+	File fifo_out(openFifo(fifo, O_WRONLY));
 	FileContext ctx(&fifo_out);
 	dyplo::Thread writer;
 	
@@ -502,6 +442,7 @@ FUNC(hardware_driver_h_irq_driven_write)
 	check_all_input_fifos_are_empty();
 }
 
+/* Test disabled for now */
 static void hardware_driver_i_hdl_block_processing()
 {
 	static unsigned int routes[] = {
@@ -518,8 +459,8 @@ static void hardware_driver_i_hdl_block_processing()
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (int fifo = 0; fifo < 2; ++fifo)
 	{
-		File hdl_in(fifo, O_WRONLY);
-		File hdl_out(fifo, O_RDONLY);
+		File hdl_in(openFifo(fifo, O_WRONLY));
+		File hdl_out(openFifo(fifo, O_RDONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
 		EQUAL(sizeof(data), bytes_written);
 		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */

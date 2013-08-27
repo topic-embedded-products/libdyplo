@@ -10,6 +10,7 @@ dyplo_libinclude_HEADERS = \
     mutex.hpp \
     thread.hpp \
     queue.hpp \
+    fileio.hpp \
     filequeue.hpp \
     scopedlock.hpp \
     noopscheduler.hpp \
@@ -20,6 +21,7 @@ dyplo_libinclude_HEADERS = \
 libdyplo_la_SOURCES = \
     noopscheduler.cpp \
     pthreadscheduler.cpp \
+    fileio.cpp \
     filequeue.cpp \
     $(dyplo_libinclude_HEADERS)
 libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
