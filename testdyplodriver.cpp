@@ -453,14 +453,48 @@ FUNC(hardware_driver_h_irq_driven_write)
 	check_all_input_fifos_are_empty();
 }
 
+FUNC(hardware_driver_i_cpu_block_crossbar)
+{
+	/* Set up weird routing */
+	static dyplo::HardwareContext::Route routes[] = {
+		{0, 0, 16, 0}, 
+		{17,0, 18, 0},
+		{1, 0, 31, 0},
+		{31,0, 4, 0},
+	};
+	dyplo::HardwareContext ctrl;
+	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	int data[] = {0x12345678, 0xDEADBEEF};
+	const size_t data_size = sizeof(data)/sizeof(data[0]);
+	for (int i = 0; i < sizeof(routes)/sizeof(routes[0]); ++i)
+	{
+		int src = routes[i].srcFifo;
+		int dst = routes[i].dstFifo;
+		File f_src(openFifo(src, O_WRONLY));
+		File f_dst(openFifo(dst, O_RDONLY));
+		ssize_t bytes_written = f_src.write(data, sizeof(data));
+		EQUAL(sizeof(data), bytes_written);
+		if (!f_dst.poll_for_incoming_data(2)) {
+			std::ostringstream msg;
+			msg << "Routing " << src << " -> " << dst << " didn't work, no data received";
+			FAIL(msg.str());
+		}
+		int buffer[data_size];
+		ssize_t bytes_read = f_dst.read(buffer, sizeof(buffer));
+		EQUAL(sizeof(buffer), bytes_read);
+		for (int i=0; i < data_size; ++i)
+			EQUAL(data[i], buffer[i]);
+	}
+}
+
 /* Test disabled for now */
-static void hardware_driver_i_hdl_block_processing()
+FUNC(hardware_driver_j_hdl_block_processing)
 {
 	static dyplo::HardwareContext::Route routes[] = {
-		{0, 0, 1, 0}, 
-		{1, 0, 0, 0}, /* Fifo 0 to HDL #1 port 0 */
-		{0, 1, 2, 0},
-		{2, 0, 0, 1}, /* HDL #2 connected to fifo 1 */
+		{0, 1, 0, 0}, 
+		{0, 0, 0, 1}, /* Fifo 0 to HDL #1 port 0 */
+		{1, 2, 1, 0},
+		{1, 0, 1, 2}, /* HDL #2 connected to fifo 1 */
 	};
 	dyplo::HardwareContext ctrl;
 	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
