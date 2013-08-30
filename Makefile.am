@@ -12,6 +12,7 @@ dyplo_libinclude_HEADERS = \
     queue.hpp \
     fileio.hpp \
     filequeue.hpp \
+    hardware.hpp \
     scopedlock.hpp \
     noopscheduler.hpp \
     cooperativescheduler.hpp \
@@ -23,6 +24,7 @@ libdyplo_la_SOURCES = \
     pthreadscheduler.cpp \
     fileio.cpp \
     filequeue.cpp \
+    hardware.cpp \
     $(dyplo_libinclude_HEADERS)
 libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
 dyplo_libincludedir = $(includedir)/dyplo

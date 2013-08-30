@@ -28,6 +28,8 @@ namespace dyplo
 		{
 			::close(handle);
 		}
+		
+		operator int() const { return handle; }
 
 		ssize_t write(const void *buf, size_t count)
 		{

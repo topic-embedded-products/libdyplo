@@ -1,37 +1,15 @@
 #include <unistd.h>
-#include <sys/ioctl.h>
 #include <errno.h>
 #include "fileio.hpp"
 #include "filequeue.hpp"
 #include "thread.hpp"
 #include "condition.hpp"
 #include "mutex.hpp"
+#include "hardware.hpp"
 
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
-/* TODO: Put in header */
-/* ioctl values for dyploctl device, set and get routing tables */
-struct dyplo_route_t  {
-	unsigned int n_routes;
-	unsigned int* proutes;
-};
-#define DYPLO_IOC_MAGIC	'd'
-#define DYPLO_IOC_ROUTE_CLEAR	0x00
-#define DYPLO_IOC_ROUTE_SET	0x01
-#define DYPLO_IOC_ROUTE_GET	0x02
-#define DYPLO_IOC_ROUTE_TELL	0x03
-/* S means "Set" through a ptr,
- * T means "Tell", sets directly
- * G means "Get" through a ptr
- * Q means "Query", return value */
-#define DYPLO_IOCROUTE_CLEAR	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_CLEAR)
-#define DYPLO_IOCSROUTE   _IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_SET, struct dyplo_route_t)
-#define DYPLO_IOCGROUTE   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_GET, struct dyplo_route_t)
-#define DYPLO_IOCTROUTE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL)
-
-
-const char DRIVER_CONTROL[] = "/dev/dyploctl";
 
 using dyplo::File;
 
@@ -51,8 +29,8 @@ static int openFifo(int fifo, int access)
 
 FUNC(hardware_driver_a_control_multiple_open)
 {
-	File ctrl1(DRIVER_CONTROL);
-	File ctrl2(DRIVER_CONTROL);
+	dyplo::HardwareContext ctrl1;
+	dyplo::HardwareContext ctrl2;
 }
 
 FUNC(hardware_driver_b_config_single_open)
@@ -84,41 +62,74 @@ FUNC(hardware_driver_c_fifo_single_open_rw_access)
 
 static void connect_all_fifos_in_loop()
 {
-	File ctrl(DRIVER_CONTROL);
-	unsigned int routes[32];
-	struct dyplo_route_t route_table = {32, routes};
-	for (int i = 0; i < 32; ++i)
-		routes[i] = (i << 16) | (i << 0);
-	/* TODO: Send to driver (and verify?) */
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCSROUTE, &route_table));
+	dyplo::HardwareContext ctrl;
+	dyplo::HardwareContext::Route routes[32];
+	for (int i = 0; i < 32; ++i) {
+		routes[i].srcNode = 0;
+		routes[i].srcFifo = i;
+		routes[i].dstNode = 0;
+		routes[i].dstFifo = i;
+	}
+	ctrl.routeAdd(routes, 32);
 }
 
 FUNC(hardware_driver_d_io_control)
 {
-	struct dyplo_route_t routes;
-	routes.n_routes = 10;
-	routes.proutes = new unsigned int [64];
-	File ctrl(DRIVER_CONTROL);
-	/* Invalid ioctl, must fail */
-	EQUAL(-1, ioctl(ctrl.handle, 0x12345678));
-	EQUAL(ENOTTY, errno);
+	dyplo::HardwareContext ctrl;
+	dyplo::HardwareContext::Route routes[64];
 	/* Clean all routes */
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCROUTE_CLEAR));
-	int n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
+	ctrl.routeDeleteAll();
+	int n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(n_routes, 0);
 	/* Set up single route */
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCTROUTE, 0x00000000)); /* Should be: fifo 0[0] -> fifo 0[0] */
-	n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
+	ctrl.routeAddSingle(0,0,0,0);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(1, n_routes);
-	EQUAL(0x00000000, routes.proutes[0]);
+	EQUAL(0, (int)routes[0].srcNode);
+	EQUAL(0, (int)routes[0].srcFifo);
+	EQUAL(0, (int)routes[0].dstNode);
+	EQUAL(0, (int)routes[0].dstFifo);
+	ctrl.routeAddSingle(0,1,0,1);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(2, n_routes);
+	EQUAL(0, (int)routes[1].srcNode);
+	EQUAL(1, (int)routes[1].srcFifo);
+	EQUAL(0, (int)routes[1].dstNode);
+	EQUAL(1, (int)routes[1].dstFifo);
+	ctrl.routeAddSingle(0,1,0,2); /* Overwrites existing route */
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(2, n_routes);
+	EQUAL(0, (int)routes[1].srcNode);
+	EQUAL(1, (int)routes[1].srcFifo);
+	EQUAL(0, (int)routes[1].dstNode);
+	EQUAL(2, (int)routes[1].dstFifo);
+	ctrl.routeAddSingle(0,1,0,1);
+	/* Start over */
+	ctrl.routeDeleteAll();
+	ctrl.routeAddSingle(2,1,0,4);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(1, n_routes);
+	EQUAL(2, (int)routes[0].srcNode);
+	EQUAL(1, (int)routes[0].srcFifo);
+	EQUAL(0, (int)routes[0].dstNode);
+	EQUAL(4, (int)routes[0].dstFifo);
 	/* Setup loopback system (1->0, 1->1 etc) */
 	connect_all_fifos_in_loop();
-	routes.n_routes = 64;
-	n_routes = ioctl(ctrl.handle, DYPLO_IOCGROUTE, &routes);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(32, n_routes);
 	for (int fifo=0; fifo<32; ++fifo)
-		EQUAL((fifo << 16) | (fifo << 0), routes.proutes[fifo]);
-	delete [] routes.proutes;
+	{
+		EQUAL(0, routes[fifo].srcNode);
+		EQUAL(fifo, routes[fifo].srcFifo);
+		EQUAL(0, routes[fifo].dstNode);
+		EQUAL(fifo, routes[fifo].dstFifo);
+	}
 }
 
 FUNC(hardware_driver_e_transmit_loop)
@@ -445,16 +456,14 @@ FUNC(hardware_driver_h_irq_driven_write)
 /* Test disabled for now */
 static void hardware_driver_i_hdl_block_processing()
 {
-	static unsigned int routes[] = {
-		0x00000020, /* Fifo 0 to HDL #1 port 0 */
-		0x00200000, /* HDL Output 0 to FIFO 0 */
-		0x00010040, /* HDL #2 connected to fifo 1 */
-		0x00400001, /* and output to fifo 1 */
+	static dyplo::HardwareContext::Route routes[] = {
+		{0, 0, 1, 0}, 
+		{1, 0, 0, 0}, /* Fifo 0 to HDL #1 port 0 */
+		{0, 1, 2, 0},
+		{2, 0, 0, 1}, /* HDL #2 connected to fifo 1 */
 	};
-	static struct dyplo_route_t route_table = {
-			sizeof(routes)/sizeof(routes[0]), routes};
-	File ctrl(DRIVER_CONTROL);
-	EQUAL(0, ioctl(ctrl.handle, DYPLO_IOCSROUTE, &route_table));
+	dyplo::HardwareContext ctrl;
+	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	int data[] = {1, 2, 42000, -42000};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (int fifo = 0; fifo < 2; ++fifo)
