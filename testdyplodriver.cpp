@@ -470,8 +470,8 @@ FUNC(hardware_driver_i_cpu_block_crossbar)
 	{
 		int src = routes[i].srcFifo;
 		int dst = routes[i].dstFifo;
-		File f_src(openFifo(src, O_WRONLY));
-		File f_dst(openFifo(dst, O_RDONLY));
+		File f_src(ctrl.openFifo(src, O_WRONLY));
+		File f_dst(ctrl.openFifo(dst, O_RDONLY));
 		ssize_t bytes_written = f_src.write(data, sizeof(data));
 		EQUAL(sizeof(data), bytes_written);
 		if (!f_dst.poll_for_incoming_data(2)) {
@@ -490,6 +490,9 @@ FUNC(hardware_driver_i_cpu_block_crossbar)
 /* Test disabled for now */
 FUNC(hardware_driver_j_hdl_block_processing)
 {
+	static const int hdl_configuration_blob[] = {
+		1, 10001, -1000, 1000
+	};
 	static dyplo::HardwareContext::Route routes[] = {
 		{0, 1, 0, 0}, 
 		{0, 0, 0, 1}, /* Fifo 0 to HDL #1 port 0 */
@@ -502,16 +505,25 @@ FUNC(hardware_driver_j_hdl_block_processing)
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (int fifo = 0; fifo < 2; ++fifo)
 	{
-		File hdl_in(openFifo(fifo, O_WRONLY));
-		File hdl_out(openFifo(fifo, O_RDONLY));
+		/* configure HDL block with coefficients */
+		{
+			File hdl_config(ctrl.openConfig(fifo+1, O_WRONLY));
+			EQUAL(sizeof(hdl_configuration_blob),
+				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+		}
+		/* Write some test data */
+		File hdl_in(ctrl.openFifo(fifo, O_WRONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
 		EQUAL(sizeof(data), bytes_written);
+		/* Read results and verify */
+		File hdl_out(ctrl.openFifo(fifo, O_RDONLY));
 		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
 		int buffer[data_size];
 		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
 		EQUAL(sizeof(buffer), bytes_read);
+		/* Check results: End result should be "ADD 1" operation */
 		for (int i=0; i < data_size; ++i)
-			EQUAL(data[i], buffer[i]);
+			EQUAL(data[i] + hdl_configuration_blob[fifo], buffer[i]);
 	}
 	check_all_input_fifos_are_empty();
 }

@@ -1,5 +1,7 @@
 #include "hardware.hpp"
 #include <sys/ioctl.h>
+#include <errno.h>
+#include <sstream>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 
@@ -36,6 +38,7 @@ struct dyplo_route_t  {
 namespace dyplo
 {
 	static const char DRIVER_CONTROL[] = DYPLO_DRIVER_PREFIX "ctl";
+	static const char DRIVER_CONFIG[] = DYPLO_DRIVER_PREFIX "cfg";
 	
 	HardwareContext::HardwareContext():
 		control_device(DRIVER_CONTROL, O_RDWR)
@@ -71,4 +74,25 @@ namespace dyplo
 		if (::ioctl(control_device, DYPLO_IOCSROUTE, &routes) != 0)
 			throw IOException();
 	}
+	
+	int HardwareContext::openFifo(int fifo, int access)
+	{
+		std::ostringstream name;
+		if (access == O_RDONLY)
+			name << DYPLO_DRIVER_PREFIX "r";
+		else if (access == O_WRONLY)
+			name << DYPLO_DRIVER_PREFIX "w";
+		else
+			throw IOException(EACCES);
+		name << fifo;
+		return ::open(name.str().c_str(), access);
+	}
+	
+	int HardwareContext::openConfig(int index, int access)
+	{
+		std::ostringstream name;
+		name << DRIVER_CONFIG << index;
+		return ::open(name.str().c_str(), access);
+	}
+	
 }

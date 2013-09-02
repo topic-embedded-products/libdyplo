@@ -20,7 +20,10 @@ namespace dyplo
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
 
+		/* Returns a file handle that must be closed. Suggest to use
+		 * as "dyplo::File(hwc.openFifo(..)); " */
 		int openFifo(int fifo, int access);
+		int openConfig(int index, int access);
 		
 	protected:
 		File control_device;

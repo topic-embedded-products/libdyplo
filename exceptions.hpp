@@ -32,6 +32,7 @@ namespace dyplo
 	{
 	public:
 		IOException();
+		IOException(int error_code);
 		virtual const char* what() const throw();
 		int m_errno;
 	};

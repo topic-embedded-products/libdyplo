@@ -21,6 +21,10 @@ namespace dyplo
 		m_errno(errno)
 	{
 	}
+	IOException::IOException(int code):
+		m_errno(code)
+	{
+	}
 
 	const char* IOException::what() const throw()
 	{
