@@ -542,9 +542,15 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 		{1, 1, 0, 2}, /* 2.0 -> 1.1 */
 		{1, 2, 1, 1}, /* 1.1 -> 2.1 */
 		{2, 1, 1, 2}, /* 2.1 -> 1.2 */
+#if 1
 		{2, 2, 2, 1}, /* 1.2 -> 2.2 */
 		{3, 1, 2, 2}, /* 2.2 -> 1.3 */
 		{3, 2, 3, 1}, /* 1.3 -> 2.3 */
+#else
+		{3, 1, 2, 1}, /* 1.2 -> 1.3 */
+		{2, 2, 3, 1}, /* 1.3 -> 2.2 */
+		{3, 2, 2, 2}, /* 2.2 -> 2.3 */
+#endif
 		{7, 0, 3, 2}, /* 2.3 -> 0.7 */
 	};
 	dyplo::HardwareContext ctrl;
@@ -593,13 +599,14 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 		File fifo_in(ctrl.openFifo(7, O_RDONLY));
 		CHECK(fifo_in.poll_for_incoming_data(1) ); /*  has data */
 		EQUAL(0, dyplo::set_non_blocking(fifo_in.handle));
-		int* buffer = new int[1024];
+		const size_t blocksize = 1024*sizeof(int);
+		int* buffer = new int[blocksize/sizeof(int)];
 		ssize_t total_read = 0;
 		while (total_read < total_written)
 		{
 			int bytes_to_read;
-			if (total_written - total_read > sizeof(buffer))
-				bytes_to_read = sizeof(buffer);
+			if (total_written - total_read > blocksize)
+				bytes_to_read = blocksize;
 			else
 				bytes_to_read = total_written - total_read;
 			ssize_t bytes_read;
@@ -609,7 +616,13 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 			catch (const dyplo::IOException& ex)
 			{
 				/* Handle EAGAIN errors by waiting for more */
-				CHECK(fifo_in.poll_for_incoming_data(1));
+				if (!fifo_in.poll_for_incoming_data(1)) {
+					std::ostringstream msg;
+					msg << "No more data: " << ex.what() <<
+						" after " << total_read << " of "<<
+						total_written << " bytes.";
+					FAIL(msg.str());
+				}
 				continue;
 			}
 			const ssize_t ints_read = bytes_read >> 2;
