@@ -549,8 +549,6 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 	};
 	dyplo::HardwareContext ctrl;
 	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
-	int data[] = {1, 2, 42000, -42000, 0x12345678, 0x01234567};
-	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	/* configure HDL block with coefficients */
 	for (int block = 1; block < 3; ++block)
 	{
@@ -567,6 +565,8 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 	}
 	{
 		/* Write some test data */
+		const int data[] = {1, 2, 42000, -42000, 0x12345678, 0x01234567};
+		const size_t data_size = sizeof(data)/sizeof(data[0]);
 		File hdl_in(ctrl.openFifo(6, O_WRONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
 		EQUAL(sizeof(data), bytes_written);
@@ -579,6 +579,49 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 		/* Check results: End result should be "ADD 1" operation */
 		for (int i=0; i < data_size; ++i)
 			EQUAL(data[i] + total_effect, buffer[i]);
+	}
+	{
+		File fifo_out(ctrl.openFifo(6, O_WRONLY));
+		const int signature = 0x1000000;
+		/* Set output fifo in non-blocking mode */
+		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
+		ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature);
+		CHECK(total_written > 0);
+		CHECK(total_written > 8000); /* We should be able to dump a LOT */
+		/* Status must indicate that there is no room */
+		CHECK(! fifo_out.poll_for_outgoing_data(0));
+		File fifo_in(ctrl.openFifo(7, O_RDONLY));
+		CHECK(fifo_in.poll_for_incoming_data(1) ); /*  has data */
+		EQUAL(0, dyplo::set_non_blocking(fifo_in.handle));
+		int* buffer = new int[1024];
+		ssize_t total_read = 0;
+		while (total_read < total_written)
+		{
+			int bytes_to_read;
+			if (total_written - total_read > sizeof(buffer))
+				bytes_to_read = sizeof(buffer);
+			else
+				bytes_to_read = total_written - total_read;
+			ssize_t bytes_read;
+			try {
+				bytes_read = fifo_in.read(buffer, bytes_to_read);
+			}
+			catch (const dyplo::IOException& ex)
+			{
+				/* Handle EAGAIN errors by waiting for more */
+				CHECK(fifo_in.poll_for_incoming_data(1));
+				continue;
+			}
+			const ssize_t ints_read = bytes_read >> 2;
+			for (int i = 0; i < ints_read; ++i) {
+				EQUAL((total_read >> 2) + i + signature + total_effect, buffer[i]);
+			}
+			total_read += bytes_read;
+		}
+		delete [] buffer;
+		EQUAL(total_written, total_read);
+		CHECK(! fifo_in.poll_for_incoming_data(0) ); /* is empty */
+		CHECK(fifo_out.poll_for_outgoing_data(0)); /* Has room */
 	}
 	check_all_input_fifos_are_empty();
 }
