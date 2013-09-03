@@ -164,7 +164,7 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
 {
 	const int blocksize = 1024;
 	/* Fill it until it is full */
-	int max_repeats = 100;
+	int max_repeats = 256;
 	int* buffer = new int[blocksize];
 	ssize_t total_written = 0;
 	
@@ -179,6 +179,12 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
 	}
 	delete [] buffer;
 	
+	if (max_repeats <= 0)
+	{
+		std::ostringstream msg;
+		msg << "Still not full after " << total_written << " bytes";
+		FAIL(msg.str());
+	}
 	CHECK(max_repeats > 0);
 	
 	return total_written;
@@ -529,57 +535,17 @@ FUNC(hardware_driver_j_hdl_block_processing)
 	check_all_input_fifos_are_empty();
 }
 
-FUNC(hardware_driver_k_hdl_block_to_block)
+static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to_cpu_fifo, int total_effect)
 {
-	static const int hdl_configuration_blob[] = {
-		1, 101, -1001, 10001
-	};
-	int total_effect = 0;
-	for (int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
-		total_effect += 2 * hdl_configuration_blob[i];
-	/* Set up route: Loop through the HDL blocks four times */
-	static dyplo::HardwareContext::Route routes[] = {
-		{0, 1, 6, 0}, /* 0.6 -> 1.0 */
-		{0, 2, 0, 1}, /* 1.0 -> 2.0 */
-		{1, 1, 0, 2}, /* 2.0 -> 1.1 */
-		{1, 2, 1, 1}, /* 1.1 -> 2.1 */
-		{2, 1, 1, 2}, /* 2.1 -> 1.2 */
-#if 1
-		{2, 2, 2, 1}, /* 1.2 -> 2.2 */
-		{3, 1, 2, 2}, /* 2.2 -> 1.3 */
-		{3, 2, 3, 1}, /* 1.3 -> 2.3 */
-#else
-		{3, 1, 2, 1}, /* 1.2 -> 1.3 */
-		{2, 2, 3, 1}, /* 1.3 -> 2.2 */
-		{3, 2, 2, 2}, /* 2.2 -> 2.3 */
-#endif
-		{7, 0, 3, 2}, /* 2.3 -> 0.7 */
-	};
-	dyplo::HardwareContext ctrl;
-	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
-	/* configure HDL block with coefficients */
-	for (int block = 1; block < 3; ++block)
-	{
-		try
-		{
-			File hdl_config(ctrl.openConfig(block, O_WRONLY));
-			EQUAL(sizeof(hdl_configuration_blob),
-				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
-		}
-		catch (const dyplo::IOException& ex)
-		{
-			FAIL(ex.what());
-		}
-	}
 	{
 		/* Write some test data */
 		const int data[] = {1, 2, 42000, -42000, 0x12345678, 0x01234567};
 		const size_t data_size = sizeof(data)/sizeof(data[0]);
-		File hdl_in(ctrl.openFifo(6, O_WRONLY));
+		File hdl_in(ctrl.openFifo(from_cpu_fifo, O_WRONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
 		EQUAL(sizeof(data), bytes_written);
 		/* Read results and verify */
-		File hdl_out(ctrl.openFifo(7, O_RDONLY));
+		File hdl_out(ctrl.openFifo(to_cpu_fifo, O_RDONLY));
 		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
 		int buffer[data_size];
 		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
@@ -639,4 +605,82 @@ FUNC(hardware_driver_k_hdl_block_to_block)
 		CHECK(fifo_out.poll_for_outgoing_data(0)); /* Has room */
 	}
 	check_all_input_fifos_are_empty();
+}
+
+FUNC(hardware_driver_k_hdl_block_ping_pong)
+{
+	static const int hdl_configuration_blob[] = {
+		1, 101, -1001, 10001
+	};
+	int total_effect = 0;
+	for (int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
+		total_effect += 2 * hdl_configuration_blob[i];
+	/* Set up route: Loop through the HDL blocks four times */
+	static dyplo::HardwareContext::Route routes[] = {
+		{0, 1, 6, 0}, /* 0.6 -> 1.0 */
+		{0, 2, 0, 1}, /* 1.0 -> 2.0 */
+		{1, 1, 0, 2}, /* 2.0 -> 1.1 */
+		{1, 2, 1, 1}, /* 1.1 -> 2.1 */
+		{2, 1, 1, 2}, /* 2.1 -> 1.2 */
+		{2, 2, 2, 1}, /* 1.2 -> 2.2 */
+		{3, 1, 2, 2}, /* 2.2 -> 1.3 */
+		{3, 2, 3, 1}, /* 1.3 -> 2.3 */
+		{7, 0, 3, 2}, /* 2.3 -> 0.7 */
+	};
+	dyplo::HardwareContext ctrl;
+	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	/* configure HDL block with coefficients */
+	for (int block = 1; block < 3; ++block)
+	{
+		try
+		{
+			File hdl_config(ctrl.openConfig(block, O_WRONLY));
+			EQUAL(sizeof(hdl_configuration_blob),
+				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+		}
+		catch (const dyplo::IOException& ex)
+		{
+			FAIL(ex.what());
+		}
+	}
+	run_hdl_test(ctrl, 6, 7, total_effect);
+}
+
+static void hardware_driver_k_hdl_block_zig_zag()
+{
+	static const int hdl_configuration_blob[] = {
+		7, -17, 1000001, 10001
+	};
+	int total_effect = 0;
+	for (int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
+		total_effect += 2 * hdl_configuration_blob[i];
+	/* Set up route: Loop through the HDL blocks four times */
+	static dyplo::HardwareContext::Route routes[] = {
+		{0, 1, 4, 0}, /* 0.4 -> 1.0 */
+		{1, 1, 0, 1}, /* -> 1.1 */
+		{2, 1, 1, 1}, /* -> 1.2 */
+		{3, 1, 2, 1}, /* -> 1.3 */
+		{0, 2, 3, 1}, /* -> 2.0 */
+		{1, 2, 0, 2}, /* -> 2.1 */
+		{2, 2, 1, 2}, /* -> 2.2 */
+		{3, 2, 2, 2}, /* -> 2.3 */
+		{5, 0, 3, 2}, /* 2.3 -> 0.5 */
+	};
+	dyplo::HardwareContext ctrl;
+	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	/* configure HDL block with coefficients */
+	for (int block = 1; block < 3; ++block)
+	{
+		try
+		{
+			File hdl_config(ctrl.openConfig(block, O_WRONLY));
+			EQUAL(sizeof(hdl_configuration_blob),
+				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+		}
+		catch (const dyplo::IOException& ex)
+		{
+			FAIL(ex.what());
+		}
+	}
+	run_hdl_test(ctrl, 4, 5, total_effect);
 }
