@@ -28,6 +28,12 @@ namespace dyplo
 		virtual const char* what() const throw();
 	};
 	
+	class TruncatedFileException: public EndOfFileException
+	{
+	public:
+		virtual const char* what() const throw();
+	};
+
 	class IOException: public std::exception
 	{
 	public:

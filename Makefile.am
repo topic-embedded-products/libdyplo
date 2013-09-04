@@ -37,6 +37,7 @@ testdyplo_SOURCES = yaffut.h \
 	testdyplomain.cpp \
 	testdyploqueue.cpp \
 	testdyplocooperative.cpp \
+	testdyplohardware.cpp \
 	testdyplothreaded.cpp \
 	testdyplosolver.cpp
 testdyplo_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)

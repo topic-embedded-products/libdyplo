@@ -47,6 +47,14 @@ namespace dyplo
 			return result;
 		}
 		
+		off_t seek(off_t offset, int whence = SEEK_SET)
+		{
+			off_t result = ::lseek(handle, offset, whence);
+			if (result == (off_t)-1)
+				throw dyplo::IOException();
+			return result;
+		}
+		
 		bool poll_for_incoming_data(int timeout_in_seconds);
 		bool poll_for_outgoing_data(int timeout_in_seconds);
 	private:

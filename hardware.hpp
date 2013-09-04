@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include "fileio.hpp"
 
 namespace dyplo
@@ -15,6 +16,7 @@ namespace dyplo
 		};
 
 		HardwareContext();
+		HardwareContext(const std::string& driver_prefix);
 		void routeDeleteAll();
 		void routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo);
 		int routeGetAll(Route* items, int n_items);
@@ -25,7 +27,13 @@ namespace dyplo
 		int openFifo(int fifo, int access);
 		int openConfig(int index, int access);
 		
+		/* Program device using a partial bitstream */
+		static void setProgramMode(bool is_partial_bitstream);
+		static bool getProgramMode();
+		static unsigned int program(File &output, const char* filename);
+		static unsigned int program(const char* filename);
 	protected:
 		File control_device;
+		std::string prefix;
 	};
 }
