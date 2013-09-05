@@ -55,6 +55,7 @@ FUNC(program_bin_file)
 		xdevcfg.seek(0);
 		EQUAL(sizeof(valid_bin_bitstream), xdevcfg.read(&buffer[0], sizeof(valid_bin_bitstream)));
 		CHECK(memcmp(valid_bin_bitstream, &buffer[0], sizeof(valid_bin_bitstream)) == 0);
+		EQUAL(sizeof(valid_bin_bitstream), dyplo::File::get_size("/tmp/bitstream"));
 	}
 	/* Valid "bit" stream, must remove header and flip bytes */
 	{

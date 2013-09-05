@@ -215,7 +215,7 @@ namespace dyplo
 	unsigned int HardwareContext::program(const char* filename)
 	{
 		File output(XILINX_XDEVCFG, O_WRONLY);
-		program(output, filename);
+		return program(output, filename);
 	}
 
 }

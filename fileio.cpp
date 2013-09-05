@@ -37,4 +37,13 @@ namespace dyplo
 			throw dyplo::IOException();
 		return status && FD_ISSET(handle, &fds);
 	}
+
+	off_t File::get_size(const char* path)
+	{
+		struct stat info;
+		int status = ::stat(path, &info);
+		if (status < 0)
+			throw dyplo::IOException();
+		return info.st_size;
+	}
 }
