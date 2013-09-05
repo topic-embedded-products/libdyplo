@@ -1,0 +1,41 @@
+libdyplo
+
+BUILD
+
+If you're using OpenEmbedded, the "libdyplo.bb" recipe builds and packs
+everything.
+
+It is possible to run parts of the software on a Linux system without
+dyplo hardware. This is being used for unit-testing those components.
+
+The project uses autotools, so if you're familiar with that, you may
+already know what to do.
+
+To manually build the software, run the configure script, which will
+create the makefile, and then run make to build the software. The
+only dependency is pthreads.
+
+./configure
+make
+
+Run "./configure --help" to list options. For faster building, supply a
+"-j" parameter to make to use multiple cores.
+
+
+RUNNING TESTS
+
+To run unit tests (on any system), just make the "check" target. This
+will run the tests and report the results
+
+make check
+
+If you built for the target system (autotools "--host" can be used to
+quickly cross-compile using a prebuilt toolchain, if you have that),
+you can run both the software only and teh hardware based tests. If
+you're using the OpenEmbedded recipe, the executables will be in
+a package called "libdyplo-test". Run the following programs to check
+that everything is working. For testdyplodriver to work, you must have
+kernel-module-dyplo installed, configured and loaded into the kernel.
+
+testdyplo
+testdyplodriver
