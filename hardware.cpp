@@ -166,7 +166,7 @@ namespace dyplo
 				throw TruncatedFileException();
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			input.seek(data + 4 - &buffer[0]);
-			unsigned int total_bytes;
+			unsigned int total_bytes = 0;
 			while (total_bytes < size)
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;

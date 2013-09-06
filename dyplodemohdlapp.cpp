@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 						continue;
 					case 'h':
 						usage();
-						continue;
+						return 1;
 				}
 			}
 			int v = atoi(arg);

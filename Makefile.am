@@ -31,7 +31,7 @@ dyplo_libincludedir = $(includedir)/dyplo
 
 TESTS = testdyplo
 bin_PROGRAMS = $(TESTS) testdyplodriver \
-	dyplodemoapp dyplodemocryptoapp dyplodemohdlapp dyplodemoprogrammer
+	dyplodemoapp dyplodemocryptoapp dyplodemohdlapp dyplodemoprogrammer dyplodemoroute
 
 testdyplo_SOURCES = yaffut.h \
 	testdyplomain.cpp \
@@ -46,5 +46,6 @@ dyplodemoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 dyplodemocryptoapp_LDADD = libdyplo.la
 dyplodemohdlapp_LDADD = libdyplo.la
 dyplodemoprogrammer_LDADD = libdyplo.la
+dyplodemoroute_LDADD = libdyplo.la
 
 dist_bin_SCRIPTS = testdyplohardware.sh
