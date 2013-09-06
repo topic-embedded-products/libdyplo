@@ -52,9 +52,9 @@ static int read_int(char const **txt)
 	return result;
 }
 
-static dyplo::HardwareContext::Route parse_route(const char *txt)
+static dyplo::HardwareControl::Route parse_route(const char *txt)
 {
-	dyplo::HardwareContext::Route result;
+	dyplo::HardwareControl::Route result;
 	int v;
 	const char* d = txt;
 	v = read_int(&d);
@@ -101,12 +101,12 @@ int main(int argc, char** argv)
 				return 1;
 			}
 		}
-		std::vector<dyplo::HardwareContext::Route> routes(argc-optind);
+		std::vector<dyplo::HardwareControl::Route> routes(argc-optind);
 		for (; optind < argc; ++optind)
 		{
 			if (verbose)
 				std::cerr << argv[optind] << ": " << std::flush;
-			dyplo::HardwareContext::Route route = parse_route(argv[optind]);
+			dyplo::HardwareControl::Route route = parse_route(argv[optind]);
 			if (verbose)
 				std::cerr << " "
 					<< (int)route.srcNode << "." << (int)route.srcFifo
@@ -118,7 +118,7 @@ int main(int argc, char** argv)
 		if (!routes.empty())
 		{
 			dyplo::HardwareContext ctrl;
-			ctrl.routeAdd(&routes[0], routes.size());
+			dyplo::HardwareControl(ctrl).	routeAdd(&routes[0], routes.size());
 		}
 	}
 	catch (const std::exception& ex)

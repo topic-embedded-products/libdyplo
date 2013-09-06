@@ -65,20 +65,21 @@ FUNC(hardware_driver_c_fifo_single_open_rw_access)
 static void connect_all_fifos_in_loop()
 {
 	dyplo::HardwareContext ctrl;
-	dyplo::HardwareContext::Route routes[32];
+	dyplo::HardwareControl::Route routes[32];
 	for (int i = 0; i < 32; ++i) {
 		routes[i].srcNode = 0;
 		routes[i].srcFifo = i;
 		routes[i].dstNode = 0;
 		routes[i].dstFifo = i;
 	}
-	ctrl.routeAdd(routes, 32);
+	dyplo::HardwareControl(ctrl).routeAdd(routes, 32);
 }
 
 FUNC(hardware_driver_d_io_control)
 {
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareContext::Route routes[64];
+	dyplo::HardwareContext ctx;
+	dyplo::HardwareControl::Route routes[64];
+	dyplo::HardwareControl ctrl(ctx);
 	/* Clean all routes */
 	ctrl.routeDeleteAll();
 	int n_routes =
@@ -464,14 +465,14 @@ FUNC(hardware_driver_h_irq_driven_write)
 FUNC(hardware_driver_i_cpu_block_crossbar)
 {
 	/* Set up weird routing */
-	static dyplo::HardwareContext::Route routes[] = {
+	static dyplo::HardwareControl::Route routes[] = {
 		{0, 0, 16, 0}, 
 		{17,0, 18, 0},
 		{1, 0, 31, 0},
 		{31,0, 4, 0},
 	};
 	dyplo::HardwareContext ctrl;
-	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	int data[] = {0x12345678, 0xDEADBEEF};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (unsigned int i = 0; i < sizeof(routes)/sizeof(routes[0]); ++i)
@@ -500,14 +501,14 @@ FUNC(hardware_driver_j_hdl_block_processing)
 	static const int hdl_configuration_blob[] = {
 		1, 10001, -1000, 100
 	};
-	static dyplo::HardwareContext::Route routes[] = {
+	static dyplo::HardwareControl::Route routes[] = {
 		{0, 1, 0, 0}, 
 		{0, 0, 0, 1}, /* Fifo 0 to HDL #1 port 0 */
 		{1, 2, 1, 0},
 		{1, 0, 1, 2}, /* HDL #2 connected to fifo 1 */
 	};
 	dyplo::HardwareContext ctrl;
-	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	int data[] = {1, 2, 42000, -42000};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (int fifo = 0; fifo < 2; ++fifo)
@@ -616,7 +617,7 @@ FUNC(hardware_driver_k_hdl_block_ping_pong)
 	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
-	static dyplo::HardwareContext::Route routes[] = {
+	static dyplo::HardwareControl::Route routes[] = {
 		{0, 1, 6, 0}, /* 0.6 -> 1.0 */
 		{0, 2, 0, 1}, /* 1.0 -> 2.0 */
 		{1, 1, 0, 2}, /* 2.0 -> 1.1 */
@@ -628,7 +629,8 @@ FUNC(hardware_driver_k_hdl_block_ping_pong)
 		{7, 0, 3, 2}, /* 2.3 -> 0.7 */
 	};
 	dyplo::HardwareContext ctrl;
-	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(ctrl)
+		.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
 	for (int block = 1; block < 3; ++block)
 	{
@@ -655,7 +657,7 @@ static void hardware_driver_k_hdl_block_zig_zag()
 	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
-	static dyplo::HardwareContext::Route routes[] = {
+	static dyplo::HardwareControl::Route routes[] = {
 		{0, 1, 4, 0}, /* 0.4 -> 1.0 */
 		{1, 1, 0, 1}, /* -> 1.1 */
 		{2, 1, 1, 1}, /* -> 1.2 */
@@ -667,7 +669,7 @@ static void hardware_driver_k_hdl_block_zig_zag()
 		{5, 0, 3, 2}, /* 2.3 -> 0.5 */
 	};
 	dyplo::HardwareContext ctrl;
-	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
 	for (int block = 1; block < 3; ++block)
 	{

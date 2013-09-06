@@ -15,9 +15,8 @@ static void usage()
 int main(int argc, char** argv)
 {
 	bool verbose = false;
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareContext::Route routes[n_hdl * n_fifos * 2];
-	dyplo::HardwareContext::Route *entry = routes;
+	dyplo::HardwareControl::Route routes[n_hdl * n_fifos * 2];
+	dyplo::HardwareControl::Route *entry = routes;
 	for (int hdl = 0; hdl < n_hdl; ++hdl)
 	{
 		int base = hdl * n_fifos;
@@ -37,6 +36,7 @@ int main(int argc, char** argv)
 			++entry;
 		}
 	}
+	dyplo::HardwareContext ctrl;
 	/* Parse commandline */
 	{
 		int data[n_fifos * n_hdl];
@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 				std::cout << "\n";
 			}
 		}
-		ctrl.routeAdd(routes, n_hdl * n_fifos * 2);
+		dyplo::HardwareControl(ctrl).routeAdd(routes, n_hdl * n_fifos * 2);
 	}
 	catch (const std::exception& ex)
 	{

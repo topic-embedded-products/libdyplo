@@ -86,12 +86,14 @@ FUNC(program_mode)
 	try
 	{
 		dyplo::HardwareContext ctrl; /* Create a real device */
+		bool old_mode = ctrl.getProgramMode();
 		try
 		{
 			ctrl.setProgramMode(true);
 			CHECK(ctrl.getProgramMode());
 			ctrl.setProgramMode(false);
 			CHECK(!ctrl.getProgramMode());
+			ctrl.setProgramMode(old_mode);
 		}
 		catch (const dyplo::IOException& ex)
 		{

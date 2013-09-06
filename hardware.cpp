@@ -42,53 +42,18 @@ struct dyplo_route_t  {
 
 namespace dyplo
 {
-	static const char DRIVER_CONTROL[] = DYPLO_DRIVER_PREFIX "ctl";
-
 	const char* TruncatedFileException::what() const throw()
 	{
 		return "Unexpected end of file";
 	}
 	
 	HardwareContext::HardwareContext():
-		control_device(DRIVER_CONTROL, O_RDWR),
 		prefix(DYPLO_DRIVER_PREFIX)
 	{}
 	
 	HardwareContext::HardwareContext(const std::string& driver_prefix):
-		control_device((std::string(driver_prefix) + "ctl").c_str()),
 		prefix(driver_prefix)
 	{
-	}
-	
-	void HardwareContext::routeDeleteAll()
-	{
-		if (::ioctl(control_device, DYPLO_IOCROUTE_CLEAR) != 0)
-			throw IOException();
-	}
-
-	void HardwareContext::routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo)
-	{
-		struct dyplo_route_item_t route =
-			{dstFifo, dstNode, srcFifo, srcNode};
-		if (::ioctl(control_device, DYPLO_IOCTROUTE, route) != 0)
-			throw IOException();
-	}
-
-	int HardwareContext::routeGetAll(Route* items, int n_items)
-	{
-		struct dyplo_route_t routes;
-		routes.n_routes = n_items;
-		routes.proutes = (struct dyplo_route_item_t*)items;
-		return ::ioctl(control_device, DYPLO_IOCGROUTE, &routes);
-	}
-
-	void HardwareContext::routeAdd(const Route* items, int n_items)
-	{
-		struct dyplo_route_t routes;
-		routes.n_routes = n_items;
-		routes.proutes = (struct dyplo_route_item_t*)items;
-		if (::ioctl(control_device, DYPLO_IOCSROUTE, &routes) != 0)
-			throw IOException();
 	}
 	
 	int HardwareContext::openFifo(int fifo, int access)
@@ -109,6 +74,13 @@ namespace dyplo
 	{
 		std::ostringstream name;
 		name << prefix << "cfg" << index;
+		return ::open(name.str().c_str(), access);
+	}
+
+	int HardwareContext::openControl(int access)
+	{
+		std::ostringstream name;
+		name << prefix << "ctl";
 		return ::open(name.str().c_str(), access);
 	}
 
@@ -218,4 +190,34 @@ namespace dyplo
 		return program(output, filename);
 	}
 
+	void HardwareControl::routeDeleteAll()
+	{
+		if (::ioctl(handle, DYPLO_IOCROUTE_CLEAR) != 0)
+			throw IOException();
+	}
+
+	void HardwareControl::routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo)
+	{
+		struct dyplo_route_item_t route =
+			{dstFifo, dstNode, srcFifo, srcNode};
+		if (::ioctl(handle, DYPLO_IOCTROUTE, route) != 0)
+			throw IOException();
+	}
+
+	int HardwareControl::routeGetAll(Route* items, int n_items)
+	{
+		struct dyplo_route_t routes;
+		routes.n_routes = n_items;
+		routes.proutes = (struct dyplo_route_item_t*)items;
+		return ::ioctl(handle, DYPLO_IOCGROUTE, &routes);
+	}
+
+	void HardwareControl::routeAdd(const Route* items, int n_items)
+	{
+		struct dyplo_route_t routes;
+		routes.n_routes = n_items;
+		routes.proutes = (struct dyplo_route_item_t*)items;
+		if (::ioctl(handle, DYPLO_IOCSROUTE, &routes) != 0)
+			throw IOException();
+	}
 }
