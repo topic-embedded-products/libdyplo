@@ -33,7 +33,7 @@ FUNC(single_element_queue_cooperative_scheduler)
 	YAFFUT_CHECK(output.empty());
 
 	input.push_one(42);
-	YAFFUT_EQUAL(1, output.size());
+	YAFFUT_EQUAL(1u, output.size());
 	YAFFUT_CHECK(input.empty());
 	YAFFUT_EQUAL(43, output.pop_one());
 	YAFFUT_CHECK(output.empty());
@@ -54,7 +54,7 @@ FUNC(fixed_memory_queue_cooperative_scheduler_multi)
 	input.push_one(42);
 	YAFFUT_CHECK(output.empty());
 	input.push_one(43);
-	YAFFUT_EQUAL(2, output.size());
+	YAFFUT_EQUAL(2u, output.size());
 	YAFFUT_CHECK(input.empty());
 
 	YAFFUT_EQUAL(43, output.pop_one());
@@ -83,14 +83,14 @@ FUNC(multiple_processes_and_queues)
 	input_to_a.push_one(32767); /* Cause overflow in short */
 	YAFFUT_EQUAL(-32767, output_from_b.pop_one());
 
-	YAFFUT_EQUAL(0, input_to_a.size());
-	YAFFUT_EQUAL(0, between_a_and_b.size());
-	YAFFUT_EQUAL(0, output_from_b.size());
+	YAFFUT_EQUAL(0u, input_to_a.size());
+	YAFFUT_EQUAL(0u, between_a_and_b.size());
+	YAFFUT_EQUAL(0u, output_from_b.size());
 
 	input_to_a.push_one(60);
-	YAFFUT_EQUAL(0, input_to_a.size());
-	YAFFUT_EQUAL(0, between_a_and_b.size());
-	YAFFUT_EQUAL(1, output_from_b.size());
+	YAFFUT_EQUAL(0u, input_to_a.size());
+	YAFFUT_EQUAL(0u, between_a_and_b.size());
+	YAFFUT_EQUAL(1u, output_from_b.size());
 	input_to_a.push_one(61);
-	YAFFUT_EQUAL(2, output_from_b.size());
+	YAFFUT_EQUAL(2u, output_from_b.size());
 }

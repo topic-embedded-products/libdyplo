@@ -53,17 +53,17 @@ FUNC(program_bin_file)
 		EQUAL(sizeof(valid_bin_bitstream), ctrl.program(xdevcfg, "/tmp/bitstream"));
 		std::vector<unsigned char> buffer(sizeof(valid_bin_bitstream));
 		xdevcfg.seek(0);
-		EQUAL(sizeof(valid_bin_bitstream), xdevcfg.read(&buffer[0], sizeof(valid_bin_bitstream)));
+		EQUAL((ssize_t)sizeof(valid_bin_bitstream), xdevcfg.read(&buffer[0], sizeof(valid_bin_bitstream)));
 		CHECK(memcmp(valid_bin_bitstream, &buffer[0], sizeof(valid_bin_bitstream)) == 0);
-		EQUAL(sizeof(valid_bin_bitstream), dyplo::File::get_size("/tmp/bitstream"));
+		EQUAL((ssize_t)sizeof(valid_bin_bitstream), dyplo::File::get_size("/tmp/bitstream"));
 	}
 	/* Valid "bit" stream, must remove header and flip bytes */
 	{
 		xdevcfg.seek(0);
-		::ftruncate(xdevcfg, 0);
+		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		bitstream.write(valid_bit_bitstream, sizeof(valid_bit_bitstream));
-		EQUAL(32, ctrl.program(xdevcfg, "/tmp/bitstream"));
+		EQUAL(32u, ctrl.program(xdevcfg, "/tmp/bitstream"));
 		std::vector<unsigned char> buffer(sizeof(valid_bit_bitstream));
 		xdevcfg.seek(0);
 		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); /* Properly truncated */
@@ -73,9 +73,9 @@ FUNC(program_bin_file)
 	/* Truncated "bit" stream */
 	{
 		xdevcfg.seek(0);
-		::ftruncate(xdevcfg, 0);
+		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
-		::ftruncate(bitstream, sizeof(valid_bit_bitstream) - 10);
+		EQUAL(0, ::ftruncate(bitstream, sizeof(valid_bit_bitstream) - 10));
 		ASSERT_THROW(ctrl.program(xdevcfg, "/tmp/bitstream"), dyplo::TruncatedFileException);
 	}
 	::unlink("/tmp/xdevcfg");

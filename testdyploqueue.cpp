@@ -13,7 +13,7 @@ FUNC(a_fixed_memory_queue_without_scheduler)
 
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> q(capacity);
 
-	for (int i = 0; i < 20; ++i)
+	for (unsigned int i = 0; i < 20; ++i)
 	{
 		int* data;
 		YAFFUT_CHECK(q.empty());
@@ -24,12 +24,12 @@ FUNC(a_fixed_memory_queue_without_scheduler)
 		q.end_write(block);
 
 		YAFFUT_CHECK(!q.empty());
-		int result;
+		unsigned int result;
 		result = q.begin_read(data, block);
 		YAFFUT_EQUAL(block, result);
 		YAFFUT_CHECK(data != NULL);
 		for (unsigned int b = 0; b < block; ++b)
-			YAFFUT_EQUAL(10 * i + b, data[b]);
+			YAFFUT_EQUAL((int)(10 * i + b), data[b]);
 		q.end_read(block);
 	}
 	YAFFUT_CHECK(q.empty());
@@ -56,25 +56,25 @@ FUNC(a_fixed_memory_queue_border_cases)
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> q(5);
 	int* data;
 
-	YAFFUT_EQUAL(5, q.begin_write(data, 1));
+	YAFFUT_EQUAL(5u, q.begin_write(data, 1));
 	data[0] = 1;
 	data[1] = 2;
 	data[2] = 3;
 	q.end_write(3);
-	YAFFUT_EQUAL(3, q.begin_read(data, 1));
+	YAFFUT_EQUAL(3u, q.begin_read(data, 1));
 	YAFFUT_EQUAL(2, data[1]);
 	q.end_read(2);
-	YAFFUT_EQUAL(2, q.begin_write(data, 1)); /* Leave 1 item */
+	YAFFUT_EQUAL(2u, q.begin_write(data, 1)); /* Leave 1 item */
 	data[0] = 4;
 	data[1] = 5;
 	q.end_write(1);
 	q.end_write(1);
-	YAFFUT_EQUAL(2, q.begin_write(data, 1));
-	YAFFUT_EQUAL(3, q.begin_read(data, 1));
+	YAFFUT_EQUAL(2u, q.begin_write(data, 1));
+	YAFFUT_EQUAL(3u, q.begin_read(data, 1));
 	q.end_write(1);
-	YAFFUT_EQUAL(1, q.begin_write(data, 1));
+	YAFFUT_EQUAL(1u, q.begin_write(data, 1));
 	q.end_read(2);
-	YAFFUT_EQUAL(3, q.begin_write(data, 1));
+	YAFFUT_EQUAL(3u, q.begin_write(data, 1));
 }
 
 
@@ -84,11 +84,11 @@ FUNC(a_single_queue)
 	int* data = NULL;
 	
 	YAFFUT_CHECK(q.empty());
-	YAFFUT_EQUAL(1, q.begin_write(data, 1));
+	YAFFUT_EQUAL(1u, q.begin_write(data, 1));
 	*data = 42;
 	q.end_write(1);
 	data = NULL;
-	YAFFUT_EQUAL(1, q.begin_read(data, 1));
+	YAFFUT_EQUAL(1u, q.begin_read(data, 1));
 	YAFFUT_EQUAL(*data, 42);
 	YAFFUT_CHECK(q.full());
 	q.end_read(1);
@@ -112,7 +112,7 @@ FUNC(a_queue_with_strings)
 		q.push_one("Five");
 		
 		YAFFUT_EQUAL(std::string("One"), q.pop_one());
-		YAFFUT_EQUAL(4, q.begin_read(data, 4));
+		YAFFUT_EQUAL(4u, q.begin_read(data, 4));
 		YAFFUT_EQUAL("Two", data[0]);
 		YAFFUT_EQUAL("Three", data[1]);
 		YAFFUT_EQUAL("Four", data[2]);
@@ -137,6 +137,7 @@ public:
 	const Storage& operator =(const Storage&)
 	{
 		++assignment_count;
+		return *this;
 	}
 private:
 	/* Prove that a copy constructor is not needed */
@@ -173,28 +174,28 @@ FUNC(a_file_queue)
 	unsigned int count;
 
 	count = output.begin_write(data, 1);
-	YAFFUT_EQUAL(10, count);
+	YAFFUT_EQUAL(10u, count);
 	YAFFUT_CHECK(data != NULL);
 	for (int i = 0; i < 10; ++i)
 		data[i] = i * 10;
 	output.end_write(10);
 	
 	count = input.begin_read(data, 5);
-	YAFFUT_EQUAL(5, count);
+	YAFFUT_EQUAL(5u, count);
 	YAFFUT_CHECK(data != NULL);
 	for (int i = 0; i < 5; ++i)
 		YAFFUT_EQUAL(i * 10, data[i]);
 	input.end_read(3); /* Only take 3 items from the queue */
 
 	count = input.begin_read(data, 5);
-	YAFFUT_EQUAL(5, count);
+	YAFFUT_EQUAL(5u, count);
 	YAFFUT_CHECK(data != NULL);
 	for (int i = 0; i < 5; ++i)
 		YAFFUT_EQUAL(30 + i * 10, data[i]);
 	input.end_read(5);
 
 	count = input.begin_read(data, 2);
-	YAFFUT_EQUAL(2, count);
+	YAFFUT_EQUAL(2u, count);
 	YAFFUT_CHECK(data != NULL);
 	for (int i = 0; i < 2; ++i)
 		YAFFUT_EQUAL(80 + i * 10, data[i]);
@@ -211,14 +212,14 @@ FUNC(a_file_queue_non_blocking)
 	unsigned int count;
 
 	count = output.begin_write(data, 1);
-	YAFFUT_EQUAL(10, count);
+	YAFFUT_EQUAL(10u, count);
 	YAFFUT_CHECK(data != NULL);
 	for (int i = 0; i < 10; ++i)
 		data[i] = i * 10;
 	output.end_write(10);
 
 	count = input.begin_read(data, 5);
-	YAFFUT_EQUAL(10, count); /* Should read more than requested */
+	YAFFUT_EQUAL(10u, count); /* Should read more than requested */
 	input.end_read(count);
 	
 	int written = 0;
@@ -228,7 +229,7 @@ FUNC(a_file_queue_non_blocking)
 		count = output.begin_write(data, 0);
 		if (count < 10)
 			break;
-		YAFFUT_EQUAL(10, count);
+		YAFFUT_EQUAL(10u, count);
 		output.end_write(10);
 		written += 10;
 	}

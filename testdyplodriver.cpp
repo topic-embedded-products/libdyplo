@@ -148,14 +148,14 @@ FUNC(hardware_driver_e_transmit_loop)
 		int received[16];
 		for (int repeats = 4; repeats != 0; --repeats)
 		{
-			for (int i=0; i<sizeof(buffer)/sizeof(buffer[0]); ++i)
+			for (unsigned int i=0; i<sizeof(buffer)/sizeof(buffer[0]); ++i)
 				buffer[i] = i + (1000 * i * repeats);
 			int bytes = write(fifo_out.handle, buffer, sizeof(buffer));
-			EQUAL(bytes, sizeof(buffer));
+			EQUAL((ssize_t)sizeof(buffer), bytes);
 			bytes = read(fifo_in.handle, received, bytes);
-			EQUAL(bytes, sizeof(buffer));
-			for (int i=0; i<sizeof(buffer)/sizeof(buffer[0]); ++i)
-				EQUAL(i + (repeats * 1000 * i), received[i]);
+			EQUAL((ssize_t)sizeof(buffer), bytes);
+			for (unsigned int i=0; i<sizeof(buffer)/sizeof(buffer[0]); ++i)
+				EQUAL((int)(i + (repeats * 1000 * i)), received[i]);
 		}
 	}
 }
@@ -174,7 +174,7 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
 			buffer[i] = ((total_written >> 2) + i) + signature;
 		ssize_t written = fifo_out.write(buffer, blocksize*sizeof(buffer[0]));
 		total_written += written;
-		if (written < blocksize*sizeof(buffer[0]))
+		if (written < (ssize_t)(blocksize*sizeof(buffer[0])))
 			break;
 	}
 	delete [] buffer;
@@ -365,10 +365,10 @@ void hardware_driver_irq_driven_read_single(int fifo)
 	reader.start(thread_read_data, &ctx);
 	ctx.wait(); /* Block until we're calling "read" on the other thread*/
 	char buffer[16];
-	EQUAL(sizeof(buffer), fifo_out.write(buffer, sizeof(buffer)));
+	EQUAL((ssize_t)sizeof(buffer), fifo_out.write(buffer, sizeof(buffer)));
 	void* result;
 	EQUAL(reader.join(&result), 0);
-	EQUAL(sizeof(buffer), (ssize_t)result);
+	EQUAL((ssize_t)sizeof(buffer), (ssize_t)result);
 }
 
 FUNC(hardware_driver_g_irq_driven_read)
@@ -427,15 +427,15 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	for (int i = 0; i < (bytes>>2); ++i)
 		EQUAL(buffer[i], (total_read>>2) + i);
 	total_read += bytes;
-	EQUAL(bytes, sizeof(buffer));
+	EQUAL((ssize_t)sizeof(buffer), bytes);
 	void* result;
 	EQUAL(writer.join(&result), 0);
-	EQUAL(sizeof(extra_data_to_write_in_thread), (ssize_t)result);
+	EQUAL((ssize_t)sizeof(extra_data_to_write_in_thread), (ssize_t)result);
 	/* Drain the buffer */
 	while (total_read < total_written)
 	{
 		int bytes_to_read;
-		if (total_written - total_read > sizeof(buffer))
+		if (total_written - total_read > (ssize_t)sizeof(buffer))
 			bytes_to_read = sizeof(buffer);
 		else
 			bytes_to_read = total_written - total_read;
@@ -448,8 +448,8 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	EQUAL(total_written, total_read);
 	/* check that the "tail" is also available */
 	bytes = fifo_in.read(buffer, sizeof(extra_data_to_write_in_thread));
-	EQUAL(sizeof(extra_data_to_write_in_thread), bytes);
-	for (int i = 0; i < sizeof(extra_data_to_write_in_thread)/sizeof(extra_data_to_write_in_thread[0]); ++i)
+	EQUAL((ssize_t)sizeof(extra_data_to_write_in_thread), bytes);
+	for (unsigned int i = 0; i < sizeof(extra_data_to_write_in_thread)/sizeof(extra_data_to_write_in_thread[0]); ++i)
 		EQUAL(extra_data_to_write_in_thread[i], buffer[i]);
 }
 
@@ -474,14 +474,14 @@ FUNC(hardware_driver_i_cpu_block_crossbar)
 	ctrl.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	int data[] = {0x12345678, 0xDEADBEEF};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
-	for (int i = 0; i < sizeof(routes)/sizeof(routes[0]); ++i)
+	for (unsigned int i = 0; i < sizeof(routes)/sizeof(routes[0]); ++i)
 	{
 		int src = routes[i].srcFifo;
 		int dst = routes[i].dstFifo;
 		File f_src(ctrl.openFifo(src, O_WRONLY));
 		File f_dst(ctrl.openFifo(dst, O_RDONLY));
 		ssize_t bytes_written = f_src.write(data, sizeof(data));
-		EQUAL(sizeof(data), bytes_written);
+		EQUAL((ssize_t)sizeof(data), bytes_written);
 		if (!f_dst.poll_for_incoming_data(2)) {
 			std::ostringstream msg;
 			msg << "Routing " << src << " -> " << dst << " didn't work, no data received";
@@ -489,9 +489,9 @@ FUNC(hardware_driver_i_cpu_block_crossbar)
 		}
 		int buffer[data_size];
 		ssize_t bytes_read = f_dst.read(buffer, sizeof(buffer));
-		EQUAL(sizeof(buffer), bytes_read);
-		for (int i=0; i < data_size; ++i)
-			EQUAL(data[i], buffer[i]);
+		EQUAL((ssize_t)sizeof(buffer), bytes_read);
+		for (unsigned int j = 0; j < data_size; ++j)
+			EQUAL(data[j], buffer[j]);
 	}
 }
 
@@ -515,21 +515,21 @@ FUNC(hardware_driver_j_hdl_block_processing)
 		/* configure HDL block with coefficients */
 		{
 			File hdl_config(ctrl.openConfig(fifo+1, O_WRONLY));
-			EQUAL(sizeof(hdl_configuration_blob),
+			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
 		/* Write some test data */
 		File hdl_in(ctrl.openFifo(fifo, O_WRONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
-		EQUAL(sizeof(data), bytes_written);
+		EQUAL((ssize_t)sizeof(data), bytes_written);
 		/* Read results and verify */
 		File hdl_out(ctrl.openFifo(fifo, O_RDONLY));
 		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
 		int buffer[data_size];
 		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
-		EQUAL(sizeof(buffer), bytes_read);
+		EQUAL((ssize_t)sizeof(buffer), bytes_read);
 		/* Check results: End result should be "ADD 1" operation */
-		for (int i=0; i < data_size; ++i)
+		for (unsigned int i=0; i < data_size; ++i)
 			EQUAL(data[i] + hdl_configuration_blob[fifo], buffer[i]);
 	}
 	check_all_input_fifos_are_empty();
@@ -543,15 +543,15 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 		const size_t data_size = sizeof(data)/sizeof(data[0]);
 		File hdl_in(ctrl.openFifo(from_cpu_fifo, O_WRONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
-		EQUAL(sizeof(data), bytes_written);
+		EQUAL((ssize_t)sizeof(data), bytes_written);
 		/* Read results and verify */
 		File hdl_out(ctrl.openFifo(to_cpu_fifo, O_RDONLY));
 		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
 		int buffer[data_size];
 		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
-		EQUAL(sizeof(buffer), bytes_read);
+		EQUAL((ssize_t)sizeof(buffer), bytes_read);
 		/* Check results: End result should be "ADD 1" operation */
-		for (int i=0; i < data_size; ++i)
+		for (unsigned int i = 0; i < data_size; ++i)
 			EQUAL(data[i] + total_effect, buffer[i]);
 	}
 	{
@@ -573,7 +573,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 		while (total_read < total_written)
 		{
 			int bytes_to_read;
-			if (total_written - total_read > blocksize)
+			if (total_written - total_read > (ssize_t)blocksize)
 				bytes_to_read = blocksize;
 			else
 				bytes_to_read = total_written - total_read;
@@ -613,7 +613,7 @@ FUNC(hardware_driver_k_hdl_block_ping_pong)
 		1, 101, -1001, 10001
 	};
 	int total_effect = 0;
-	for (int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
+	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
 	static dyplo::HardwareContext::Route routes[] = {
@@ -635,7 +635,7 @@ FUNC(hardware_driver_k_hdl_block_ping_pong)
 		try
 		{
 			File hdl_config(ctrl.openConfig(block, O_WRONLY));
-			EQUAL(sizeof(hdl_configuration_blob),
+			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
 		catch (const dyplo::IOException& ex)
@@ -652,7 +652,7 @@ static void hardware_driver_k_hdl_block_zig_zag()
 		7, -17, 1000001, 10001
 	};
 	int total_effect = 0;
-	for (int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
+	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
 	static dyplo::HardwareContext::Route routes[] = {
@@ -674,7 +674,7 @@ static void hardware_driver_k_hdl_block_zig_zag()
 		try
 		{
 			File hdl_config(ctrl.openConfig(block, O_WRONLY));
-			EQUAL(sizeof(hdl_configuration_blob),
+			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
 		catch (const dyplo::IOException& ex)

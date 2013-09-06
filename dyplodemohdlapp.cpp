@@ -66,7 +66,7 @@ int main(int argc, char** argv)
 		{
 			int n_ints = index > n_fifos ? n_fifos : index;
 			dyplo::File f(ctrl.openConfig(hdl, O_WRONLY));
-			if (f.write(current, n_ints * sizeof(int)) < n_ints * sizeof(int))
+			if (f.write(current, n_ints * sizeof(int)) < (ssize_t)(n_ints * sizeof(int)))
 				throw std::runtime_error("Failed to write config data");
 			index -= n_ints;
 			current += n_ints;

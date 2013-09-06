@@ -173,7 +173,7 @@ namespace dyplo
 				bytes = input.read(&buffer[0], to_read);
 				if (bytes < to_read)
 					throw TruncatedFileException();
-				for (int index = 0; index < to_read; index += 4)
+				for (unsigned int index = 0; index < to_read; index += 4)
 				{
 					/* Flip the bytes */
 					unsigned char* data = &buffer[index];

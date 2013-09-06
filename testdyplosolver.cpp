@@ -16,7 +16,7 @@ public:
 	}
 
 protected:
-	int recurse(int function_index, unsigned int mask)
+	int recurse(unsigned int function_index, unsigned int mask)
 	{
 		if (function_index >= function_masks.size())
 			return 0;
@@ -55,7 +55,7 @@ public:
 		return recurse(0, available_mask, 0);
 	}
 	
-	unsigned int calc_max_attainable_score(int function_index, unsigned int mask)
+	unsigned int calc_max_attainable_score(unsigned int function_index, unsigned int mask)
 	{
 		unsigned int result = 0;
 		while (function_index < function_masks.size())
@@ -69,17 +69,17 @@ public:
 	
 	void check_valid()
 	{
-		const int num_functions = solution.size();
+		const unsigned int num_functions = solution.size();
 		EQUAL(num_functions, function_masks.size());
-		for (int i = 0; i < num_functions-1; ++i)
-			for (int j=i+1; j < num_functions; ++j)
+		for (unsigned int i = 0; i < num_functions-1; ++i)
+			for (unsigned int j=i+1; j < num_functions; ++j)
 				CHECK(solution[i] != solution[j]);
 	}
 
 protected:
 	std::vector<unsigned int> best_score;
 
-	unsigned int recurse(int function_index, unsigned int mask, unsigned int score)
+	unsigned int recurse(unsigned int function_index, unsigned int mask, unsigned int score)
 	{
 		if (function_index >= function_masks.size())
 			return score;
@@ -133,31 +133,31 @@ FUNC(solve_partition_configuration)
 	p.function_masks.push_back(0b110);
 	
 	YAFFUT_CHECK(p.solve(0b111) >= 0);
-	EQUAL(1, p.solution[0]);
-	EQUAL(0, p.solution[1]);
-	EQUAL(2, p.solution[2]);
+	EQUAL(1u, p.solution[0]);
+	EQUAL(0u, p.solution[1]);
+	EQUAL(2u, p.solution[2]);
 
 	p.function_masks[0] = 0b100;
 	p.function_masks[1] = 0b010;
 	p.function_masks[2] = 0b111;
 	YAFFUT_CHECK(p.solve(0b111) >= 0);
-	EQUAL(2, p.solution[0]);
-	EQUAL(1, p.solution[1]);
-	EQUAL(0, p.solution[2]);
+	EQUAL(2u, p.solution[0]);
+	EQUAL(1u, p.solution[1]);
+	EQUAL(0u, p.solution[2]);
 
-	int items = 31;
+	unsigned int items = 31;
 	p.function_masks.resize(items);
-	for (int i=0; i<items; ++i)
+	for (unsigned int i=0; i<items; ++i)
 		p.function_masks[i] = (1 << items) - 1;
 	YAFFUT_CHECK(p.solve((1 << items) - 1) >= 0);
-	for (int i=0; i<items; ++i)
+	for (unsigned int i=0; i<items; ++i)
 		EQUAL(i, p.solution[i]);
 
 	p.function_masks.resize(items);
-	for (int i=0; i<items; ++i)
+	for (unsigned int i=0; i<items; ++i)
 		p.function_masks[i] = (1 << i);
 	YAFFUT_CHECK(p.solve((1 << items) - 1) >= 0);
-	for (int i=0; i<items; ++i)
+	for (unsigned int i=0; i<items; ++i)
 		EQUAL(i, p.solution[i]);
 
 	/* No solution possible */
@@ -181,13 +181,13 @@ FUNC(solve_partition_configuration_with_mask)
 	p.function_masks[1] = 0b0111;
 	p.function_masks[2] = 0b1101;
 	YAFFUT_CHECK(p.solve(0b1110) >= 0); /* Eliminate bit 0 */
-	EQUAL(2, p.solution[0]);
-	EQUAL(1, p.solution[1]);
-	EQUAL(3, p.solution[2]);
+	EQUAL(2u, p.solution[0]);
+	EQUAL(1u, p.solution[1]);
+	EQUAL(3u, p.solution[2]);
 	YAFFUT_CHECK(p.solve(0b1011) >= 0); /* Eliminate bit 2 */
-	EQUAL(0, p.solution[0]);
-	EQUAL(1, p.solution[1]);
-	EQUAL(3, p.solution[2]);
+	EQUAL(0u, p.solution[0]);
+	EQUAL(1u, p.solution[1]);
+	EQUAL(3u, p.solution[2]);
 }
 
 FUNC(solve_partition_configuration_with_weight)
@@ -200,16 +200,16 @@ FUNC(solve_partition_configuration_with_weight)
 	p.function_scores.push_back(2);
 	p.function_scores.push_back(3);
 	
-	EQUAL(3, p.calc_max_attainable_score(0, 0b011));
-	EQUAL(5, p.calc_max_attainable_score(0, 0b110));
-	EQUAL(5, p.calc_max_attainable_score(1, 0b110));
-	EQUAL(2, p.calc_max_attainable_score(1, 0b011));
+	EQUAL(3u, p.calc_max_attainable_score(0, 0b011));
+	EQUAL(5u, p.calc_max_attainable_score(0, 0b110));
+	EQUAL(5u, p.calc_max_attainable_score(1, 0b110));
+	EQUAL(2u, p.calc_max_attainable_score(1, 0b011));
 	
 	unsigned int r = p.solve(0b111);
 	EQUAL(6U, p.calc_max_attainable_score(0, 0b111));
 	EQUAL(5U, p.calc_max_attainable_score(1, 0b111));
 	EQUAL(3U, p.calc_max_attainable_score(2, 0b111));
-	EQUAL(6, r);
+	EQUAL(6u, r);
 	EQUAL(0, p.solution[0]);
 	EQUAL(1, p.solution[1]);
 	EQUAL(2, p.solution[2]);
@@ -217,7 +217,7 @@ FUNC(solve_partition_configuration_with_weight)
 	p.function_masks[0] = 0b001;
 	p.function_masks[1] = 0b010;
 	p.function_masks[2] = 0b010;
-	EQUAL(4, p.solve(0b111));
+	EQUAL(4u, p.solve(0b111));
 	EQUAL(0, p.solution[0]);
 	EQUAL(-1, p.solution[1]);
 	EQUAL(1, p.solution[2]);
@@ -226,13 +226,13 @@ FUNC(solve_partition_configuration_with_weight)
 	p.function_masks[0] = 0b011;
 	p.function_masks[1] = 0b011;
 	p.function_masks[2] = 0b011;
-	EQUAL(5, p.solve(0b011));
+	EQUAL(5u, p.solve(0b011));
 	EQUAL(-1, p.solution[0]);
 	EQUAL(0, p.solution[1]);
 	EQUAL(1, p.solution[2]);
 	p.check_valid();
 	
-	EQUAL(6, p.calc_max_attainable_score(0, 0b011));
+	EQUAL(6u, p.calc_max_attainable_score(0, 0b011));
 
 	/* Create a large search space. The actual test here is that this
 	 * finished in reasonable time. With the initial implementation without

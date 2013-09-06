@@ -301,8 +301,11 @@ struct Test<Case, void>
   static Registrator<Case, void> s_Registrator;
   Test()
   {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
     Registrator<Case, void>* forceInstance = &s_Registrator;
     forceInstance = 0;
+#pragma GCC diagnostic pop
   }
 };
 template <typename Case>
