@@ -3,6 +3,8 @@
 #include "hardware.hpp"
 #include "config.h"
 #include <vector>
+#include <list>
+#include <string>
 
 class TestContext
 {
@@ -85,7 +87,8 @@ FUNC(program_mode)
 {
 	try
 	{
-		dyplo::HardwareContext ctrl; /* Create a real device */
+		dyplo::HardwareContext ctrl;
+		/* If this fails, there is no driver present so skip it */
 		bool old_mode = ctrl.getProgramMode();
 		try
 		{
@@ -107,3 +110,57 @@ FUNC(program_mode)
 		return;
 	}
 }
+
+class LotsOfFiles
+{
+	std::list<std::string> files;
+	std::list<std::string> dirs;
+public:
+	void file(const char* filename, int mode = S_IRUSR|S_IWUSR)
+	{
+		dyplo::File ctl(::open(filename, O_CREAT, mode));
+		files.push_back(filename);
+	}
+	void dir(const char* filename, int mode = S_IRWXU)
+	{
+		if (::mkdir(filename, mode) != 0)
+			throw dyplo::IOException();
+		dirs.push_back(filename);
+	}
+	void cleanup()
+	{
+		while (!files.empty()) {
+			::unlink(files.front().c_str());
+			files.pop_front();
+		}
+		while (!dirs.empty()) {
+			::rmdir(dirs.front().c_str());
+			dirs.pop_front();
+		}
+	}
+	~LotsOfFiles()
+	{
+		cleanup();
+	}
+};
+
+FUNC(find_bitstreams)
+{
+	LotsOfFiles f;
+	f.dir("/tmp/dyplo_func_1");
+	f.file("/tmp/dyplo_func_1/1.bit");
+	f.file("/tmp/dyplo_func_1/2.bit");
+	f.file("/tmp/dyplo_func_1/13.bit");
+	f.file("/tmp/dyplo_func_1/31.bit");
+	f.dir("/tmp/dyplo_func_2");
+	f.file("/tmp/dyplo_func_2/only1last2digits3matter1.bit");
+	f.file("/tmp/dyplo_func_2/2.bit");
+	f.file("/tmp/dyplo_func_2/function2partition12.bit");
+	f.file("/tmp/dyplo_func_2/2-21-and-more.bit");
+	unsigned int parts;
+	parts = dyplo::HardwareContext::getAvailablePartitions("/tmp", "dyplo_func_1");
+	EQUAL((unsigned)(1<<31)|(1<<13)|(1<<2)|(1<<1), parts);
+	parts = dyplo::HardwareContext::getAvailablePartitions("/tmp", "dyplo_func_2");
+	EQUAL((unsigned)(1<<21)|(1<<12)|(1<<2)|(1<<1), parts);
+}
+

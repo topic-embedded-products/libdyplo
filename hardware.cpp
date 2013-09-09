@@ -1,10 +1,12 @@
 #include "config.h"
 #include "hardware.hpp"
+#include "directoryio.hpp"
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <sstream>
 #include <vector>
 #include <errno.h>
+#include <string.h>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 #define XILINX_IS_PARTIAL_BITSTREAM_FILE "/sys/class/xdevcfg/xdevcfg/device/is_partial_bitstream"
@@ -188,6 +190,62 @@ namespace dyplo
 	{
 		File output(XILINX_XDEVCFG, O_WRONLY);
 		return program(output, filename);
+	}
+	
+	static bool is_digit(const char c)
+	{
+		return (c >= '0') && (c <= '9');
+	}
+
+	static int parse_number_from_name(const char* name)
+	{
+		for (const char* pos = name + strlen(name) - 1; pos >= name; --pos)
+		{
+			if (is_digit(*pos))
+			{
+				int result = *pos - '0';
+				int weight = 10;
+				while (pos != name)
+				{
+					--pos;
+					if (is_digit(*pos))
+					{
+						result += weight * (*pos - '0');
+						weight *= 10;
+					}
+					else
+					{
+						break;
+					}
+				}
+				return result;
+			}
+		}
+		return -1;
+	}
+	
+	unsigned int HardwareContext::getAvailablePartitions(const char* basepath, const char* function)
+	{
+		unsigned int result = 0;
+		std::string path(basepath);
+		path += '/';
+		path += function;
+		DirectoryListing dir(path.c_str());
+		struct dirent *entry;
+		while ((entry = dir.next()) != NULL)
+		{
+			switch (entry->d_type)
+			{
+				case DT_REG:
+				case DT_LNK:
+				case DT_UNKNOWN:
+					int index = parse_number_from_name(entry->d_name);
+					if (index >= 0)
+						result |= (1 << index);
+					break;
+			}
+		}
+		return result;
 	}
 
 	void HardwareControl::routeDeleteAll()

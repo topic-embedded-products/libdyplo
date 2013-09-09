@@ -22,6 +22,9 @@ namespace dyplo
 		static bool getProgramMode();
 		static unsigned int program(File &output, const char* filename);
 		static unsigned int program(const char* filename);
+		
+		/* Find bitfiles in directories */
+		static unsigned int getAvailablePartitions(const char* basepath, const char* function);
 	protected:
 		std::string prefix;
 	};
