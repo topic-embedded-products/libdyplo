@@ -162,5 +162,9 @@ FUNC(find_bitstreams)
 	EQUAL((unsigned)(1<<31)|(1<<13)|(1<<2)|(1<<1), parts);
 	parts = dyplo::HardwareContext::getAvailablePartitions("/tmp", "dyplo_func_2");
 	EQUAL((unsigned)(1<<21)|(1<<12)|(1<<2)|(1<<1), parts);
+	std::string filename;
+	filename = dyplo::HardwareContext::findPartition("/tmp", "dyplo_func_2", 12);
+	EQUAL("/tmp/dyplo_func_2/function2partition12.bit", filename);
+	filename = dyplo::HardwareContext::findPartition("/tmp", "dyplo_func_2", 11);
+	EQUAL("", filename); /* not found */
 }
-

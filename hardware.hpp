@@ -25,6 +25,7 @@ namespace dyplo
 		
 		/* Find bitfiles in directories */
 		static unsigned int getAvailablePartitions(const char* basepath, const char* function);
+		static std::string findPartition(const char* basepath, const char* function, int partition);
 	protected:
 		std::string prefix;
 	};

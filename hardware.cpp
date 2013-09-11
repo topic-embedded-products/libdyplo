@@ -247,6 +247,28 @@ namespace dyplo
 		}
 		return result;
 	}
+	
+	std::string HardwareContext::findPartition(const char* basepath, const char* function, int partition)
+	{
+		std::string path(basepath);
+		path += '/';
+		path += function;
+		DirectoryListing dir(path.c_str());
+		struct dirent *entry;
+		while ((entry = dir.next()) != NULL)
+		{
+			switch (entry->d_type)
+			{
+				case DT_REG:
+				case DT_LNK:
+				case DT_UNKNOWN:
+					int index = parse_number_from_name(entry->d_name);
+					if (index == partition)
+						return path + '/' + entry->d_name;
+			}
+		}
+		return "";
+	}
 
 	void HardwareControl::routeDeleteAll()
 	{
