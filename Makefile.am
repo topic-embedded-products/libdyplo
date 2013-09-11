@@ -50,3 +50,6 @@ dyplodemoprogrammer_LDADD = libdyplo.la
 dyplodemoroute_LDADD = libdyplo.la
 
 dist_bin_SCRIPTS = testdyplohardware.sh
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = dyplo.pc
