@@ -48,5 +48,6 @@ namespace dyplo
 		void routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo);
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
+		void routeDelete(char node);
 	};
 }

@@ -32,6 +32,7 @@ struct dyplo_route_t  {
 #define DYPLO_IOC_ROUTE_SET	0x01
 #define DYPLO_IOC_ROUTE_GET	0x02
 #define DYPLO_IOC_ROUTE_TELL	0x03
+#define DYPLO_IOC_ROUTE_DELETE	0x04
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -40,6 +41,8 @@ struct dyplo_route_t  {
 #define DYPLO_IOCSROUTE   _IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_SET, struct dyplo_route_t)
 #define DYPLO_IOCGROUTE   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_GET, struct dyplo_route_t)
 #define DYPLO_IOCTROUTE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL)
+/* Remove routes to a node. Argument is a integer node number. */
+#define DYPLO_IOCTROUTE_DELETE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_DELETE)
 }
 
 namespace dyplo
@@ -298,6 +301,13 @@ namespace dyplo
 		routes.n_routes = n_items;
 		routes.proutes = (struct dyplo_route_item_t*)items;
 		if (::ioctl(handle, DYPLO_IOCSROUTE, &routes) != 0)
+			throw IOException();
+	}
+	
+	void HardwareControl::routeDelete(char node)
+	{
+		int arg = node;
+		if (::ioctl(handle, DYPLO_IOCTROUTE_DELETE, arg) != 0)
 			throw IOException();
 	}
 }

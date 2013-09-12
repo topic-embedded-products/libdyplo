@@ -121,6 +121,30 @@ FUNC(hardware_driver_d_io_control)
 	EQUAL(1, (int)routes[0].srcFifo);
 	EQUAL(0, (int)routes[0].dstNode);
 	EQUAL(4, (int)routes[0].dstFifo);
+	ctrl.routeAddSingle(2,0,1,3);
+	ctrl.routeAddSingle(1,0,0,5);
+	ctrl.routeAddSingle(1,1,2,2);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(4, n_routes);
+	/* Remove node */
+	ctrl.routeDelete(2);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(1, n_routes); /* Only 1,0,0,5 must remain */
+	EQUAL(1, (int)routes[0].srcNode);
+	EQUAL(0, (int)routes[0].srcFifo);
+	EQUAL(0, (int)routes[0].dstNode);
+	EQUAL(5, (int)routes[0].dstFifo);
+	ctrl.routeAddSingle(2,0,1,0);
+	ctrl.routeAddSingle(0,0,1,1);
+	ctrl.routeAddSingle(0,1,2,1);
+	ctrl.routeAddSingle(2,1,0,1);
+	ctrl.routeAddSingle(1,1,2,0);
+	ctrl.routeDelete(1);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(2, n_routes); /* Only 2,1,0,1 and 0,1,2,1 must remain */
 	/* Setup loopback system (1->0, 1->1 etc) */
 	connect_all_fifos_in_loop();
 	n_routes =
