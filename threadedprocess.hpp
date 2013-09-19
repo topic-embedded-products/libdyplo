@@ -6,27 +6,26 @@
 
 namespace dyplo
 {
-	template <class InputQueueClass, class OutputQueueClass,
-		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
-		int blocksize = 1>
-	class ThreadedProcess
+	template <class InputQueueClass, class OutputQueueClass,	class Processor>
+	class ThreadedProcessBase
 	{
 	protected:
 		InputQueueClass *input;
 		OutputQueueClass *output;
 		Thread m_thread;
+		Processor m_processor;
 	public:
 		typedef typename InputQueueClass::Element InputElement;
 		typedef typename OutputQueueClass::Element OutputElement;
 
-		ThreadedProcess():
+		ThreadedProcessBase():
 			input(NULL),
 			output(NULL),
 			m_thread()
 		{
 		}
 
-		~ThreadedProcess()
+		~ThreadedProcessBase()
 		{
 			if (input != NULL)
 				input->get_scheduler().interrupt();
@@ -48,32 +47,19 @@ namespace dyplo
 			if (input && output)
 				start();
 		}
-
-		void* process()
+		
+		void process()
 		{
-			unsigned int count;
-			InputElement *src;
-			OutputElement *dest;
-
 			try
 			{
-				for(;;)
-				{
-					count = input->begin_read(src, blocksize);
-					DEBUG_ASSERT(count >= blocksize, "invalid value from begin_read");
-					count = output->begin_write(dest, blocksize);
-					DEBUG_ASSERT(count >= blocksize, "invalid value from begin_write");
-					ProcessBlockFunction(dest, src);
-					output->end_write(blocksize);
-					input->end_read(blocksize);
-				}
+				m_processor.process(input, output);
 			}
 			catch (const dyplo::InterruptedException&)
 			{
-				//
+				// no action
 			}
-			return 0;
 		}
+
 	private:
 		void start()
 		{
@@ -82,7 +68,46 @@ namespace dyplo
 
 		static void* run(void* arg)
 		{
-			return ((ThreadedProcess*)arg)->process();
+			((ThreadedProcessBase*)arg)->process();
+			return 0;
 		}
 	};
+	
+	template <class InputQueueClass, class OutputQueueClass,
+		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
+		int blocksize = 1
+	> class StaticProcessor
+	{
+	public:
+		typedef typename InputQueueClass::Element InputElement;
+		typedef typename OutputQueueClass::Element OutputElement;
+
+		void process(InputQueueClass* input, OutputQueueClass* output)
+		{
+			InputElement *src;
+			OutputElement *dest;
+			for(;;)
+			{
+				unsigned int count = input->begin_read(src, blocksize);
+				DEBUG_ASSERT(count >= blocksize, "invalid value from begin_read");
+				count = output->begin_write(dest, blocksize);
+				DEBUG_ASSERT(count >= blocksize, "invalid value from begin_write");
+				ProcessBlockFunction(dest, src);
+				output->end_write(blocksize);
+				input->end_read(blocksize);
+			}
+		}
+	};
+	
+	
+	template <class InputQueueClass, class OutputQueueClass,
+		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
+		int blocksize = 1>
+	class ThreadedProcess:
+		public ThreadedProcessBase<InputQueueClass, OutputQueueClass,
+			StaticProcessor<InputQueueClass, OutputQueueClass, ProcessBlockFunction, blocksize>
+		>
+	{
+	};
+
 }
