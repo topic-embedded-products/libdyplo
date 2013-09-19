@@ -25,7 +25,13 @@ namespace dyplo
 		{
 		}
 
-		~ThreadedProcessBase()
+		virtual ~ThreadedProcessBase()
+		{
+			terminate();
+		}
+
+		/* May be called from destructor in derived classes */
+		void terminate()
 		{
 			if (input != NULL)
 				input->get_scheduler().interrupt();

@@ -7,22 +7,20 @@ namespace dyplo
 {
 	template <
 		class InputQueueClass,
-		class OutputQueueClass,
-		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
-		int blocksize = 1>
-	class CooperativeProcess: public Process
+		class OutputQueueClass>
+	class CooperativeProcessBase: public Process
 	{
 	protected:
 		InputQueueClass *input;
 		OutputQueueClass *output;
 
 	public:
-		CooperativeProcess():
+		CooperativeProcessBase():
 			input(NULL),
 			output(NULL)
 		{}
 		
-		~CooperativeProcess()
+		~CooperativeProcessBase()
 		{
 			/* Inform downstream and upstream elements that we
 			 * will terminate */
@@ -43,28 +41,42 @@ namespace dyplo
 			output = value;
 		}
 
-		/* override */ void process_one()
-		{
-			unsigned int count;
-			typename InputQueueClass::Element *src;
-			typename OutputQueueClass::Element *dest;
-
-			for (;;)
-			{
-				count = input->begin_read(src, 0);
-				if (count < blocksize)
-					return;
-				output->begin_write(dest, blocksize);
-				ProcessBlockFunction(dest, src);
-				output->end_write(blocksize);
-				input->end_read(blocksize);
-			}
-		}
-
 		/* override */ void interrupt()
 		{
 			if (output != NULL)
 				output->get_scheduler().interrupt();
+		}
+	};
+
+
+	template <
+		class InputQueueClass,
+		class OutputQueueClass,
+		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
+		int blocksize = 1>
+	class CooperativeProcess: public CooperativeProcessBase<InputQueueClass, OutputQueueClass>
+	{
+	public:
+		typedef CooperativeProcessBase<InputQueueClass, OutputQueueClass> Base;
+		/* override */ void process_one()
+		{
+			typename InputQueueClass::Element *src;
+			typename OutputQueueClass::Element *dest;
+			for (;;)
+			{
+				unsigned int count = Base::input->begin_read(src, 0);
+				if (count < blocksize)
+					return;
+				Base::output->begin_write(dest, blocksize);
+				ProcessBlockFunction(dest, src);
+				Base::output->end_write(blocksize);
+				Base::input->end_read(blocksize);
+			}
+		}
+		
+		~CooperativeProcess()
+		{
+			Base::interrupt();
 		}
 	};
 }
