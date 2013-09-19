@@ -6,23 +6,19 @@
 
 namespace dyplo
 {
-	template <class T, class Scheduler> class FixedMemoryQueue
+	template <class T, class Scheduler> class FixedMemoryQueueImpl
 	{
 	public:
 		typedef T Element;
 
-		FixedMemoryQueue(unsigned int capacity, const Scheduler& scheduler = Scheduler()):
+		FixedMemoryQueueImpl(T* buffer, unsigned int capacity, const Scheduler& scheduler = Scheduler()):
 			m_scheduler(scheduler),
-			m_buff(new T[capacity]),
+			m_buff(buffer),
 			m_end(m_buff + capacity),
 			m_first(m_buff),
 			m_last(m_buff),
 			m_size(0)
 		{}
-		~FixedMemoryQueue()
-		{
-			delete [] m_buff;
-		}
 
 		/* Return pointer to memory of "count" elements. Will block
 		* if no room in buffer for count_min items */
@@ -147,6 +143,22 @@ namespace dyplo
 		T* m_first;
 		T* m_last;
 		unsigned int m_size;
+	};
+
+	/* Generic case where "new" and "delete" are being used to
+	 * create the buffer */
+	template <class T, class Scheduler> class FixedMemoryQueue:
+		public FixedMemoryQueueImpl<T, Scheduler>
+	{
+	public:
+		FixedMemoryQueue(unsigned int capacity, const Scheduler& scheduler = Scheduler()):
+			FixedMemoryQueueImpl<T, Scheduler>(new T[capacity], capacity, scheduler)
+		{
+		}
+		~FixedMemoryQueue()
+		{
+			delete [] FixedMemoryQueueImpl<T, Scheduler>::m_buff;
+		}
 	};
 
 	/* A specialized queue that can only hold one element. */
