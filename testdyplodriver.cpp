@@ -672,7 +672,7 @@ FUNC(hardware_driver_k_hdl_block_ping_pong)
 	run_hdl_test(ctrl, 6, 7, total_effect);
 }
 
-static void hardware_driver_k_hdl_block_zig_zag()
+FUNC(hardware_driver_k_hdl_block_zig_zag)
 {
 	static const int hdl_configuration_blob[] = {
 		7, -17, 1000001, 10001
