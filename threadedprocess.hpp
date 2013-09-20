@@ -12,8 +12,8 @@ namespace dyplo
 	protected:
 		InputQueueClass *input;
 		OutputQueueClass *output;
-		Thread m_thread;
 		Processor m_processor;
+		Thread m_thread;
 	public:
 		typedef typename InputQueueClass::Element InputElement;
 		typedef typename OutputQueueClass::Element OutputElement;
@@ -22,6 +22,15 @@ namespace dyplo
 			input(NULL),
 			output(NULL),
 			m_thread()
+		{
+		}
+
+		/* Create using copy-constructor */
+		ThreadedProcessBase(const Processor& processor):
+			input(NULL),
+			output(NULL),
+			m_thread(),
+			m_processor(processor)
 		{
 		}
 
