@@ -6,3 +6,4 @@ Name: @PACKAGE_NAME@
 Description: Dyplo C++ library.
 Version: @PACKAGE_VERSION@
 Libs: -L${libdir} -ldyplo
+Cflags: -I${includedir}
