@@ -56,7 +56,7 @@ class ThreadedProcessSink
 		~ThreadedProcessSink()
 		{
 			if (input != NULL)
-				input->get_scheduler().interrupt();
+				input->interrupt();
 			m_thread.join();
 		}
 

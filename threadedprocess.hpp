@@ -43,9 +43,9 @@ namespace dyplo
 		void terminate()
 		{
 			if (input != NULL)
-				input->get_scheduler().interrupt();
+				input->interrupt();
 			if (output != NULL)
-				output->get_scheduler().interrupt();
+				output->interrupt();
 			m_thread.join();
 		}
 

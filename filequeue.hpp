@@ -120,6 +120,10 @@ namespace dyplo
 			end_write(1);
 		}
 
+		void interrupt()
+		{
+			m_scheduler.interrupt();
+		}
 		FilePollScheduler& get_scheduler() { return m_scheduler; }
 	protected:
 		T* m_buff;
@@ -203,6 +207,10 @@ namespace dyplo
 			}
 		}
 		
+		void interrupt()
+		{
+			m_scheduler.interrupt();
+		}
 		FilePollScheduler& get_scheduler() { return m_scheduler; }
 
 		T pop_one()

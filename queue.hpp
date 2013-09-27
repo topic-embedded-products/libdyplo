@@ -110,6 +110,10 @@ namespace dyplo
 			return result;
 		}
 
+		void interrupt()
+		{
+			m_scheduler.interrupt();
+		}
 
 		Scheduler& get_scheduler() { return m_scheduler; }
 		const Scheduler& get_scheduler() const { return m_scheduler; }
@@ -254,7 +258,10 @@ namespace dyplo
 			return result;
 		}
 
-
+		void interrupt()
+		{
+			m_scheduler.interrupt();
+		}
 		Scheduler& get_scheduler() { return m_scheduler; }
 		const Scheduler& get_scheduler() const { return m_scheduler; }
 	protected:
