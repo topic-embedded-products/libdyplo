@@ -42,11 +42,16 @@ namespace dyplo
 		/* May be called from destructor in derived classes */
 		void terminate()
 		{
-			if (input != NULL)
+			/* Thread is only active when both input and output are set.
+			 * No need to interrupt when either is NULL */
+			if ((input != NULL) && (output != NULL))
+			{
 				input->interrupt();
-			if (output != NULL)
 				output->interrupt();
-			m_thread.join();
+				m_thread.join();
+			}
+			input = NULL;
+			output = NULL;
 		}
 
 		void set_input(InputQueueClass *value)

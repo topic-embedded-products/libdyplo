@@ -38,7 +38,7 @@ namespace dyplo
 		{
 			throw std::runtime_error("Not implemented: wait_until_not_empty");
 		}
-		void trigger_not_full()
+		void trigger_not_full() const
 		{
 		}
 		void trigger_not_empty()
@@ -46,11 +46,11 @@ namespace dyplo
 			process_one();
 		}
 
-		void lock()
+		void lock() const
 		{
 		}
 
-		void unlock()
+		void unlock() const
 		{
 		}
 
@@ -58,6 +58,10 @@ namespace dyplo
 		{
 			if (downstream)
 				downstream->interrupt();
+		}
+
+		void reset() const
+		{
 		}
 	};
 

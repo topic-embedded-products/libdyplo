@@ -20,6 +20,15 @@ namespace dyplo
 			m_size(0)
 		{}
 
+		void reset()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.reset(); /* Undo any interrupt() condition */
+			m_first = m_buff;
+			m_last = m_buff;
+			m_size = 0;
+		}
+
 		/* Return pointer to memory of "count" elements. Will block
 		* if no room in buffer for count_min items */
 		unsigned int begin_write(T* &buffer, unsigned int count_min)
@@ -176,6 +185,13 @@ namespace dyplo
 			m_full(false)
 		{}
 
+		void reset()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.reset(); /* Undo any interrupt() condition */
+			m_full = false;
+		}
+
 		/* Return pointer to memory of "count" elements. Will block
 		* if no room in buffer for count_min items */
 		unsigned int begin_write(T* &buffer, unsigned int count_min)
@@ -262,6 +278,7 @@ namespace dyplo
 		{
 			m_scheduler.interrupt();
 		}
+
 		Scheduler& get_scheduler() { return m_scheduler; }
 		const Scheduler& get_scheduler() const { return m_scheduler; }
 	protected:

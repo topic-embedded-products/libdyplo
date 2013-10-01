@@ -44,6 +44,33 @@ FUNC(threading_scheduler_block_on_input)
 	YAFFUT_EQUAL(57, output_from_a.pop_one());
 }
 
+FUNC(threading_scheduler_reuse_process)
+{
+	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
+	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(2);
+	AddFive<int, 1> proc;
+	proc.set_input(&input_to_a);
+	proc.set_output(&output_from_a);
+
+	input_to_a.push_one(60);
+	YAFFUT_EQUAL(65, output_from_a.pop_one());
+	input_to_a.push_one(61);
+	input_to_a.push_one(62);
+	int* data;
+	output_from_a.begin_read(data, 2); /* Wait until (some) output */
+
+	proc.terminate();
+	input_to_a.reset();
+	output_from_a.reset();
+	proc.set_input(&input_to_a);
+	proc.set_output(&output_from_a);
+	input_to_a.push_one(63);
+	input_to_a.push_one(64);
+	YAFFUT_EQUAL(68, output_from_a.pop_one());
+	YAFFUT_EQUAL(69, output_from_a.pop_one());
+}
+
+
 FUNC(threading_scheduler_block_on_output)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);

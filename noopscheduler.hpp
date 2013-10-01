@@ -26,6 +26,10 @@ namespace dyplo
 		void interrupt() const
 		{
 		}
+
+		void reset() const
+		{
+		}
 	};
 
 }

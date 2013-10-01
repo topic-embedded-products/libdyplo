@@ -26,5 +26,7 @@ namespace dyplo
 		void unlock();
 
 		void interrupt();
+		/* reset is to be called with the lock held */
+		void reset();
 	};
 }

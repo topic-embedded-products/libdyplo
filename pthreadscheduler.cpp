@@ -51,4 +51,9 @@ namespace dyplo
 		m_condition_not_empty.signal();
 		unlock();
 	}
+
+	void PthreadScheduler::reset()
+	{
+		m_interrupted = false;
+	}
 }

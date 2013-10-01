@@ -66,4 +66,9 @@ namespace dyplo
 		if (::write(m_internal_pipe.write_handle(), &dummy, 1) < 0)
 			throw IOException();
 	}
+
+	void FilePollScheduler::reset()
+	{
+		m_interrupted = false;
+	}
 }

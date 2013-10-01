@@ -42,6 +42,7 @@ namespace dyplo
 			void wait_readable(int filehandle);
 			void wait_writeable(int filehandle);
 			void interrupt();
+			void reset();
 	};
 
 	template <class T> class FileOutputQueue
