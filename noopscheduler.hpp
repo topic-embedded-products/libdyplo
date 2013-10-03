@@ -23,7 +23,11 @@ namespace dyplo
 		{
 		}
 
-		void interrupt() const
+		void interrupt_not_empty() const
+		{
+		}
+
+		void interrupt_not_full() const
 		{
 		}
 

@@ -121,7 +121,7 @@ namespace dyplo
 			end_write(1);
 		}
 
-		void interrupt()
+		void interrupt_write()
 		{
 			m_scheduler.interrupt();
 		}
@@ -208,7 +208,7 @@ namespace dyplo
 			}
 		}
 		
-		void interrupt()
+		void interrupt_read()
 		{
 			m_scheduler.interrupt();
 		}

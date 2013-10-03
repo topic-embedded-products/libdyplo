@@ -54,10 +54,14 @@ namespace dyplo
 		{
 		}
 
-		void interrupt()
+		void interrupt_not_full()
 		{
 			if (downstream)
 				downstream->interrupt();
+		}
+
+		void interrupt_not_empty()
+		{
 		}
 
 		void reset() const

@@ -119,9 +119,16 @@ namespace dyplo
 			return result;
 		}
 
-		void interrupt()
+		void interrupt_read()
 		{
-			m_scheduler.interrupt();
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.interrupt_not_empty();
+		}
+
+		void interrupt_write()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.interrupt_not_full();
 		}
 
 		Scheduler& get_scheduler() { return m_scheduler; }
@@ -274,9 +281,16 @@ namespace dyplo
 			return result;
 		}
 
-		void interrupt()
+		void interrupt_read()
 		{
-			m_scheduler.interrupt();
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.interrupt_not_empty();
+		}
+
+		void interrupt_write()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.interrupt_not_full();
 		}
 
 		Scheduler& get_scheduler() { return m_scheduler; }

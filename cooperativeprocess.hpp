@@ -25,9 +25,9 @@ namespace dyplo
 			/* Inform downstream and upstream elements that we
 			 * will terminate */
 			if (input != NULL)
-				input->interrupt();
+				input->interrupt_read();
 			if (output != NULL)
-				output->interrupt();
+				output->interrupt_write();
 		}
 
 		void set_input(InputQueueClass *value)
@@ -44,7 +44,7 @@ namespace dyplo
 		/* override */ void interrupt()
 		{
 			if (output != NULL)
-				output->interrupt();
+				output->interrupt_write();
 		}
 	};
 

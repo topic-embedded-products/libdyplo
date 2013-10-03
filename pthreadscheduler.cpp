@@ -8,19 +8,20 @@ namespace dyplo
 	}
 
 	PthreadScheduler::PthreadScheduler():
-		m_interrupted(false)
+		m_interrupted_not_full(false),
+		m_interrupted_not_empty(false)
 	{
 	}
 
 	void PthreadScheduler::wait_until_not_full()
 	{
-		if (m_interrupted)
+		if (m_interrupted_not_full)
 			throw InterruptedException();
 		m_condition_not_full.wait(m_mutex);
 	}
 	void PthreadScheduler::wait_until_not_empty()
 	{
-		if (m_interrupted)
+		if (m_interrupted_not_empty)
 			throw InterruptedException();
 		m_condition_not_empty.wait(m_mutex);
 	}
@@ -43,17 +44,21 @@ namespace dyplo
 		m_mutex.unlock();
 	}
 
-	void PthreadScheduler::interrupt()
+	void PthreadScheduler::interrupt_not_full()
 	{
-		lock();
-		m_interrupted = true;
+		m_interrupted_not_full = true;
 		m_condition_not_full.signal();
+	}
+
+	void PthreadScheduler::interrupt_not_empty()
+	{
+		m_interrupted_not_empty = true;
 		m_condition_not_empty.signal();
-		unlock();
 	}
 
 	void PthreadScheduler::reset()
 	{
-		m_interrupted = false;
+		m_interrupted_not_full = false;
+		m_interrupted_not_empty = false;
 	}
 }

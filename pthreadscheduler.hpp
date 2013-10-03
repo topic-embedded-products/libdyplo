@@ -12,7 +12,8 @@ namespace dyplo
 		Mutex m_mutex;
 		Condition m_condition_not_full;
 		Condition m_condition_not_empty;
-		bool m_interrupted;
+		bool m_interrupted_not_full;
+		bool m_interrupted_not_empty;
 	public:
 		PthreadScheduler();
 
@@ -25,8 +26,9 @@ namespace dyplo
 		void lock();
 		void unlock();
 
-		void interrupt();
-		/* reset is to be called with the lock held */
+		/* interrupt and reset are to be called with the lock held */
+		void interrupt_not_full();
+		void interrupt_not_empty();
 		void reset();
 	};
 }

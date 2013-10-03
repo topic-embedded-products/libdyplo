@@ -46,8 +46,8 @@ namespace dyplo
 			 * No need to interrupt when either is NULL */
 			if ((input != NULL) && (output != NULL))
 			{
-				input->interrupt();
-				output->interrupt();
+				input->interrupt_read();
+				output->interrupt_write();
 				m_thread.join();
 			}
 			input = NULL;
