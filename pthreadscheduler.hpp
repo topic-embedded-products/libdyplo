@@ -26,9 +26,10 @@ namespace dyplo
 		void lock();
 		void unlock();
 
-		/* interrupt and reset are to be called with the lock held */
+		/* interrupt and resume are to be called with the lock held */
 		void interrupt_not_full();
 		void interrupt_not_empty();
-		void reset();
+		void resume_not_full();
+		void resume_not_empty();
 	};
 }

@@ -39,7 +39,10 @@ static const unsigned char valid_bit_bitstream[128] = {
 	   2,    1,    8,    7,    6,    5,   12,   11,   10,    9,   16,   15,   14,   13,   20,   19,
 	  18,   17,   24,   23,   22,   21,   28,   27,   26,   25,   32,   31,   30,   29, 0xE0, 0x0E,
 };
-FUNC(program_bin_file)
+
+struct hardware_programmer {};
+
+TEST(hardware_programmer, bin_file)
 {
 	TestContext tc;
 	dyplo::HardwareContext ctrl("/tmp/dyplo"); /* Create a "fake" device */
@@ -83,7 +86,7 @@ FUNC(program_bin_file)
 	::unlink("/tmp/xdevcfg");
 }
 
-FUNC(program_mode)
+TEST(hardware_programmer, program_mode)
 {
 	try
 	{
@@ -144,7 +147,7 @@ public:
 	}
 };
 
-FUNC(find_bitstreams)
+TEST(hardware_programmer, find_bitstreams)
 {
 	LotsOfFiles f;
 	f.dir("/tmp/dyplo_func_1");

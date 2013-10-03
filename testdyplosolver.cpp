@@ -124,7 +124,9 @@ protected:
 	}
 };
 
-FUNC(solve_partition_configuration)
+struct partition_solver {};
+
+TEST(partition_solver, solve_configuration)
 {
 	Partitioner p;
 	
@@ -168,7 +170,7 @@ FUNC(solve_partition_configuration)
 	YAFFUT_CHECK(p.solve(0b1111) < 0);
 }
 
-FUNC(solve_partition_configuration_with_mask)
+TEST(partition_solver, solve_with_mask)
 {
 	Partitioner p;
 	p.function_masks.push_back(0b110110);
@@ -190,7 +192,7 @@ FUNC(solve_partition_configuration_with_mask)
 	EQUAL(3u, p.solution[2]);
 }
 
-FUNC(solve_partition_configuration_with_weight)
+TEST(partition_solver, solve_with_weight)
 {
 	WeightedPartitioner p;
 	p.function_masks.push_back(0b001);

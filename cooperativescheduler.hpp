@@ -64,7 +64,13 @@ namespace dyplo
 		{
 		}
 
-		void reset() const
+		void resume_not_full()
+		{
+			if (downstream)
+				process_one();
+		}
+
+		void resume_not_empty()
 		{
 		}
 	};

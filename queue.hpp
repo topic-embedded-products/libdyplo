@@ -20,10 +20,9 @@ namespace dyplo
 			m_size(0)
 		{}
 
-		void reset()
+		void clear()
 		{
 			ScopedLock<Scheduler> lock(m_scheduler);
-			m_scheduler.reset(); /* Undo any interrupt() condition */
 			m_first = m_buff;
 			m_last = m_buff;
 			m_size = 0;
@@ -130,6 +129,18 @@ namespace dyplo
 			ScopedLock<Scheduler> lock(m_scheduler);
 			m_scheduler.interrupt_not_full();
 		}
+		
+		void resume_read()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.resume_not_empty();
+		}
+
+		void resume_write()
+		{
+			ScopedLock<Scheduler> lock(m_scheduler);
+			m_scheduler.resume_not_full();
+		}
 
 		Scheduler& get_scheduler() { return m_scheduler; }
 		const Scheduler& get_scheduler() const { return m_scheduler; }
@@ -192,10 +203,9 @@ namespace dyplo
 			m_full(false)
 		{}
 
-		void reset()
+		void clear()
 		{
 			ScopedLock<Scheduler> lock(m_scheduler);
-			m_scheduler.reset(); /* Undo any interrupt() condition */
 			m_full = false;
 		}
 

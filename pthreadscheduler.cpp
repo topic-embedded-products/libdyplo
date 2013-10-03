@@ -56,9 +56,15 @@ namespace dyplo
 		m_condition_not_empty.signal();
 	}
 
-	void PthreadScheduler::reset()
+	void PthreadScheduler::resume_not_full()
 	{
 		m_interrupted_not_full = false;
+		m_condition_not_full.signal(); /* In case the queue changed state */
+	}
+
+	void PthreadScheduler::resume_not_empty()
+	{
 		m_interrupted_not_empty = false;
+		m_condition_not_empty.signal(); /* In case the queue changed state */
 	}
 }

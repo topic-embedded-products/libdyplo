@@ -18,7 +18,9 @@ class AddFive: public dyplo::ThreadedProcess<
 {
 };
 
-FUNC(threading_scheduler_terminate_immediately)
+struct threading_scheduler {};
+
+TEST(threading_scheduler, terminate_immediately)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(2);
@@ -28,7 +30,7 @@ FUNC(threading_scheduler_terminate_immediately)
 	/* Do nothing. This destroys the thread before it runs, which must not hang. */
 }
 
-FUNC(threading_scheduler_block_on_input)
+TEST(threading_scheduler, block_on_input)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(2);
@@ -44,7 +46,7 @@ FUNC(threading_scheduler_block_on_input)
 	YAFFUT_EQUAL(57, output_from_a.pop_one());
 }
 
-FUNC(threading_scheduler_reuse_process)
+TEST(threading_scheduler, reuse_process)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(2);
@@ -60,18 +62,34 @@ FUNC(threading_scheduler_reuse_process)
 	output_from_a.begin_read(data, 2); /* Wait until (some) output */
 
 	proc.terminate();
-	input_to_a.reset();
-	output_from_a.reset();
+	input_to_a.resume_read();
+	output_from_a.resume_write();
 	proc.set_input(&input_to_a);
 	proc.set_output(&output_from_a);
 	input_to_a.push_one(63);
 	input_to_a.push_one(64);
+	/* No data lost */
+	YAFFUT_EQUAL(66, output_from_a.pop_one());
+	YAFFUT_EQUAL(67, output_from_a.pop_one());
 	YAFFUT_EQUAL(68, output_from_a.pop_one());
 	YAFFUT_EQUAL(69, output_from_a.pop_one());
+	/* External interrupt does not kill internal process */
+	input_to_a.push_one(100);
+	input_to_a.push_one(101);
+	input_to_a.interrupt_write();
+	output_from_a.interrupt_read();
+	ASSERT_THROW(input_to_a.begin_write(data, 2), dyplo::InterruptedException);
+	ASSERT_THROW(output_from_a.begin_read(data, 3), dyplo::InterruptedException);
+	input_to_a.resume_write();
+	output_from_a.resume_read();
+	/* No data lost */
+	YAFFUT_EQUAL(105, output_from_a.pop_one());
+	input_to_a.push_one(102);
+	YAFFUT_EQUAL(106, output_from_a.pop_one());
+	YAFFUT_EQUAL(107, output_from_a.pop_one());
 }
 
-
-FUNC(threading_scheduler_block_on_output)
+TEST(threading_scheduler, block_on_output)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(1);
@@ -87,7 +105,7 @@ FUNC(threading_scheduler_block_on_output)
   	input_to_a.push_one(53);
 }
 
-FUNC(threading_scheduler_multi_stages)
+TEST(threading_scheduler, multi_stages)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> output_from_a(2);
@@ -134,7 +152,9 @@ class AddTwoCQCP: public dyplo::CooperativeProcess<
 {
 };
 
-FUNC(threading_and_cooperative_mix)
+struct mixed_scheduler {};
+
+TEST(mixed_scheduler, threading_and_cooperative)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> output_from_a(2);
@@ -162,7 +182,7 @@ FUNC(threading_and_cooperative_mix)
   	YAFFUT_EQUAL(62, output_from_c.pop_one());
 }
 
-FUNC(threading_and_cooperative_mix_block_output)
+TEST(mixed_scheduler, threading_and_cooperative_block_output)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::PthreadScheduler> input_to_a(2);
 	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> output_from_a(2);
@@ -191,7 +211,7 @@ FUNC(threading_and_cooperative_mix_block_output)
 
 #include "filequeue.hpp"
 
-FUNC(file_queue_in_chain)
+TEST(mixed_scheduler, file_queue_in_chain)
 {
 	/* Q -> P -> Q -> "file" -> Q -> P -> ... */
 	dyplo::Pipe p;

@@ -6,7 +6,9 @@
 
 #include "yaffut.h"
 
-FUNC(a_fixed_memory_queue_without_scheduler)
+struct a_fixed_memory_queue {};
+
+TEST(a_fixed_memory_queue, without_scheduler)
 {
 	const unsigned int capacity = 10;
 	const unsigned int block = 2;
@@ -51,7 +53,7 @@ FUNC(a_fixed_memory_queue_without_scheduler)
 	YAFFUT_CHECK(q.empty());
 }
 
-FUNC(a_fixed_memory_queue_border_cases)
+TEST(a_fixed_memory_queue, border_cases)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> q(5);
 	int* data;
@@ -77,8 +79,8 @@ FUNC(a_fixed_memory_queue_border_cases)
 	YAFFUT_EQUAL(3u, q.begin_write(data, 1));
 }
 
-
-FUNC(a_single_queue)
+struct a_single_queue {};
+TEST(a_single_queue, basic)
 {
 	dyplo::SingleElementQueue<int, dyplo::NoopScheduler> q;
 	int* data = NULL;
@@ -95,7 +97,7 @@ FUNC(a_single_queue)
 	YAFFUT_CHECK(q.empty());
 }
 
-FUNC(a_queue_with_strings)
+TEST(a_fixed_memory_queue, with_strings)
 {
 	dyplo::FixedMemoryQueue<std::string, dyplo::NoopScheduler> q(5);
 	std::string *data;
@@ -147,7 +149,7 @@ private:
 int Storage::instances_alive_count = 0;
 int Storage::assignment_count = 0;
 
-FUNC(a_queue_with_custom_class)
+TEST(a_fixed_memory_queue, with_custom_class)
 {
 	YAFFUT_EQUAL(0, Storage::instances_alive_count);
 	YAFFUT_EQUAL(0, Storage::assignment_count);
@@ -164,7 +166,8 @@ FUNC(a_queue_with_custom_class)
 	YAFFUT_EQUAL(0, Storage::instances_alive_count);
 }
 
-FUNC(a_file_queue)
+struct a_file_queue {};
+TEST(a_file_queue, blocking)
 {
 	dyplo::Pipe p;
 	dyplo::FilePollScheduler scheduler;
@@ -202,7 +205,7 @@ FUNC(a_file_queue)
 	input.end_read(2);
 }
 
-FUNC(a_file_queue_non_blocking)
+TEST(a_file_queue, non_blocking)
 {
 	dyplo::Pipe p;
 	dyplo::FilePollScheduler scheduler;

@@ -20,7 +20,9 @@ class AddOne: public dyplo::CooperativeProcess<
 {
 };
 
-FUNC(single_element_queue_cooperative_scheduler)
+struct cooperative_scheduler {};
+
+TEST(cooperative_scheduler, single_element_queue)
 {
 	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> input;
 	dyplo::SingleElementQueue<int, dyplo::NoopScheduler> output;
@@ -39,7 +41,7 @@ FUNC(single_element_queue_cooperative_scheduler)
 	YAFFUT_CHECK(output.empty());
 }
 
-FUNC(fixed_memory_queue_cooperative_scheduler_multi)
+TEST(cooperative_scheduler, fixed_memory_queue_multi)
 {
 	dyplo::FixedMemoryQueue<int, dyplo::CooperativeScheduler> input(2);
 	dyplo::FixedMemoryQueue<int, dyplo::NoopScheduler> output(2);
@@ -62,7 +64,7 @@ FUNC(fixed_memory_queue_cooperative_scheduler_multi)
 	YAFFUT_CHECK(output.empty());
 }
 
-FUNC(multiple_processes_and_queues)
+TEST(cooperative_scheduler, multiple_processes_and_queues)
 {
 	dyplo::SingleElementQueue<int, dyplo::CooperativeScheduler> input_to_a;
 	dyplo::FixedMemoryQueue<short, dyplo::CooperativeScheduler> between_a_and_b(1);
