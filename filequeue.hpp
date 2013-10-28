@@ -103,13 +103,8 @@ namespace dyplo
 				if (write_buffer())
 					return 0;
 			}
-			/* Call the scheduler first, to make sure there's plenty
-			 * room in the buffer before attempting to write. */
-			do
-			{
+			while (write_buffer())
 				m_scheduler.wait_writeable(m_file_handle);
-			}
-			while (write_buffer());
 			buffer = m_buff;
 			return m_capacity;
 		}
