@@ -252,3 +252,58 @@ TEST(a_file_queue, non_blocking)
 	count = input.begin_read(data, 10);
 	YAFFUT_CHECK(count > 0);
 }
+
+TEST(a_file_queue, interrupt_resume)
+{
+	dyplo::Pipe p;
+	dyplo::FilePollScheduler scheduler;
+	dyplo::FileOutputQueue<int> output(scheduler, p.write_handle(), 10);
+	dyplo::FileInputQueue<int> input(scheduler, p.read_handle(), 10);
+	int* data = NULL;
+	unsigned int count;
+
+	count = output.begin_write(data, 1);
+	YAFFUT_EQUAL(10u, count);
+	YAFFUT_CHECK(data != NULL);
+	for (int i = 0; i < 10; ++i)
+		data[i] = i * 10;
+	output.end_write(10);
+
+	count = input.begin_read(data, 5);
+	YAFFUT_EQUAL(10u, count); /* Should read more than requested */
+	input.end_read(count);
+	
+	input.interrupt_read();
+	scheduler.reset();
+	
+	int written = 0;
+	while(true)
+	{
+		/* Wait until write would block on the OS fifo */
+		count = output.begin_write(data, 0);
+		if (count < 10)
+			break;
+		YAFFUT_EQUAL(10u, count);
+		output.end_write(10);
+		written += 10;
+	}
+	
+	output.interrupt_write();
+	scheduler.reset();
+	
+	while (written > 10)
+	{
+		/* Empty the OS fifo */
+		count = input.begin_read(data, 10);
+		if (count == 0)
+			break;
+		input.end_read(count);
+		written -= count;
+	}
+	YAFFUT_CHECK(written <= 10);
+	/* There must be room in the OS fifo again */
+	count = output.begin_write(data, 0);
+	YAFFUT_CHECK(count > 0);
+	count = input.begin_read(data, 10);
+	YAFFUT_CHECK(count > 0);
+}

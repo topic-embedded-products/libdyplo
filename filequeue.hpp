@@ -69,24 +69,28 @@ namespace dyplo
 		/* Returns whether caller needs to wait for more */
 		bool write_buffer()
 		{
-			while (m_bytes_to_write > 0)
+			if (!m_bytes_to_write)
+				return false;
+			int result = ::write(m_file_handle, m_writeout_position, m_bytes_to_write);
+			if (result < 0)
 			{
-				int result = ::write(m_file_handle, m_writeout_position, m_bytes_to_write);
-				if (result < 0)
-				{
-					if (errno == EAGAIN)
-						return true;
-					else
-						throw std::runtime_error("Failed to write to file");
-				}
+				if (errno == EAGAIN)
+					return true;
 				else
-				{
-					m_writeout_position += result;
-					m_bytes_to_write -= result;
-				}
+					throw std::runtime_error("Failed to write to file");
 			}
-			m_writeout_position = (char*)m_buff;
-			return false;
+			else if (result < m_bytes_to_write)
+			{
+				m_writeout_position += result;
+				m_bytes_to_write -= result;
+				return true;
+			}
+			else
+			{
+				m_writeout_position = (char*)m_buff;
+				m_bytes_to_write = 0;
+				return false;
+			}
 		}
 
 		/* Return pointer to memory of "count" elements. Will block
@@ -132,6 +136,7 @@ namespace dyplo
 		{
 			m_scheduler.interrupt();
 		}
+		
 		FilePollScheduler& get_scheduler() { return m_scheduler; }
 	protected:
 		T* m_buff;
