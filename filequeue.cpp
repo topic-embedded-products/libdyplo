@@ -37,6 +37,12 @@ namespace dyplo
 		return fcntl(file_handle, F_SETFL, flags | O_NONBLOCK);
 	}
 	
+	FilePollScheduler::FilePollScheduler():
+		m_interrupted(false)
+	{
+		set_non_blocking(m_internal_pipe.read_handle());
+	}
+	
 	void FilePollScheduler::wait_readable(int filehandle)
 	{
 		if (m_interrupted)
@@ -69,6 +75,9 @@ namespace dyplo
 
 	void FilePollScheduler::reset()
 	{
+		char dummy[16];
+		while (::read(m_internal_pipe.read_handle(), dummy, sizeof(dummy)) == sizeof(dummy))
+		{}
 		m_interrupted = false;
 	}
 }

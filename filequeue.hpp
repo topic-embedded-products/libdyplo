@@ -38,7 +38,7 @@ namespace dyplo
 			Pipe m_internal_pipe;
 			bool m_interrupted;
 		public:
-			FilePollScheduler(): m_interrupted(false) {}
+			FilePollScheduler();
 			void wait_readable(int filehandle);
 			void wait_writeable(int filehandle);
 			void interrupt();
