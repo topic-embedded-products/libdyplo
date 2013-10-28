@@ -93,12 +93,19 @@ namespace dyplo
 		* if no room in buffer for count_min items */
 		unsigned int begin_write(T* &buffer, unsigned int count_min)
 		{
-			while (write_buffer())
+			if (count_min == 0)
 			{
-				if (count_min == 0)
+				/* Don't block, just poll and return */
+				if (write_buffer())
 					return 0;
+			}
+			/* Call the scheduler first, to make sure there's plenty
+			 * room in the buffer before attempting to write. */
+			do
+			{
 				m_scheduler.wait_writeable(m_file_handle);
 			}
+			while (write_buffer());
 			buffer = m_buff;
 			return m_capacity;
 		}
@@ -172,8 +179,10 @@ namespace dyplo
 				 buffer_position = (char*)buffer;
 			}
 			int bytes_to_read = count_min * sizeof(T);
+			if (bytes_to_read) /* Blocking? poll first */
+				m_scheduler.wait_readable(m_file_handle);
 			int bytes_read = 0;
-			while (bytes_to_read > 0)
+			do
 			{
 				int buffer_space_available = (m_capacity * sizeof(T)) - (buffer_position - (char*)m_buff);
 				int result = ::read(m_file_handle, buffer_position, buffer_space_available);
@@ -195,6 +204,7 @@ namespace dyplo
 					bytes_read += result;
 				}
 			}
+			while (bytes_to_read > 0);
 			m_size = m_carry + (bytes_read / sizeof(T));
 			return m_size;
 		}
