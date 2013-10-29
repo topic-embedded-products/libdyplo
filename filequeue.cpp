@@ -52,7 +52,7 @@ namespace dyplo
 		fds[0].events = POLLIN | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
 		fds[1].fd = m_internal_pipe.read_handle();
 		fds[1].events = POLLIN | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
-		int result = poll(fds, 2, 2000);
+		int result = poll(fds, 2, -1);
 		if (result == -1)
 			throw std::runtime_error("poll() failed");
 		if (fds[1].revents)
@@ -68,7 +68,7 @@ namespace dyplo
 		fds[0].events = POLLOUT | POLLERR | POLLHUP | POLLNVAL;
 		fds[1].fd = m_internal_pipe.read_handle();
 		fds[1].events = POLLIN | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
-		int result = poll(fds, 2, 2000);
+		int result = poll(fds, 2, -1);
 		if (result == -1)
 			throw std::runtime_error("poll() failed");
 		if (fds[1].revents)
