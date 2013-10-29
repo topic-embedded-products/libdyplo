@@ -26,14 +26,15 @@ static int openFifo(int fifo, int access)
 	return ::open(name.str().c_str(), access);
 }
 
+struct hardware_driver {};
 
-FUNC(hardware_driver_a_control_multiple_open)
+TEST(hardware_driver, a_control_multiple_open)
 {
 	dyplo::HardwareContext ctrl1;
 	dyplo::HardwareContext ctrl2;
 }
 
-FUNC(hardware_driver_b_config_single_open)
+TEST(hardware_driver, b_config_single_open)
 {
 	dyplo::HardwareContext ctrl;
 	File cfg0r(ctrl.openConfig(0, O_RDONLY));
@@ -49,7 +50,7 @@ FUNC(hardware_driver_b_config_single_open)
 	ASSERT_THROW(File another_cfg3rw(ctrl.openConfig(2, O_WRONLY)), dyplo::IOException);
 }
 
-FUNC(hardware_driver_c_fifo_single_open_rw_access)
+TEST(hardware_driver, c_fifo_single_open_rw_access)
 {
 	dyplo::HardwareContext ctrl;
 	File r0(ctrl.openFifo(0, O_RDONLY));
@@ -75,7 +76,7 @@ static void connect_all_fifos_in_loop()
 	dyplo::HardwareControl(ctrl).routeAdd(routes, 32);
 }
 
-FUNC(hardware_driver_d_io_control)
+TEST(hardware_driver, d_io_control)
 {
 	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl::Route routes[64];
@@ -159,7 +160,7 @@ FUNC(hardware_driver_d_io_control)
 	}
 }
 
-FUNC(hardware_driver_e_transmit_loop)
+TEST(hardware_driver, e_transmit_loop)
 {
 	connect_all_fifos_in_loop();
 	for (int fifo=0; fifo<32; ++fifo)
@@ -288,7 +289,7 @@ void hardware_driver_poll_single(int fifo)
 	
 }
 
-FUNC(hardware_driver_f_poll)
+TEST(hardware_driver, f_poll)
 {
 	connect_all_fifos_in_loop();
 	for (int i = 0; i < 32; ++i)
@@ -380,7 +381,7 @@ void check_all_input_fifos_are_empty()
 		FAIL(msg.str());
 }
 
-void hardware_driver_irq_driven_read_single(int fifo)
+static void hardware_driver_irq_driven_read_single(int fifo)
 {
 	dyplo::Thread reader;
 	
@@ -396,7 +397,7 @@ void hardware_driver_irq_driven_read_single(int fifo)
 	EQUAL((ssize_t)sizeof(buffer), (ssize_t)result);
 }
 
-FUNC(hardware_driver_g_irq_driven_read)
+TEST(hardware_driver, g_irq_driven_read)
 {
 	connect_all_fifos_in_loop();
 	for (int fifo = 31; fifo >= 0; --fifo) /* go back, variation */
@@ -478,7 +479,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 		EQUAL(extra_data_to_write_in_thread[i], buffer[i]);
 }
 
-FUNC(hardware_driver_h_irq_driven_write)
+TEST(hardware_driver, h_irq_driven_write)
 {
 	connect_all_fifos_in_loop();
 	for (int fifo = 0; fifo < 32; ++fifo)
@@ -486,7 +487,7 @@ FUNC(hardware_driver_h_irq_driven_write)
 	check_all_input_fifos_are_empty();
 }
 
-FUNC(hardware_driver_i_cpu_block_crossbar)
+TEST(hardware_driver, i_cpu_block_crossbar)
 {
 	/* Set up weird routing */
 	static dyplo::HardwareControl::Route routes[] = {
@@ -520,7 +521,7 @@ FUNC(hardware_driver_i_cpu_block_crossbar)
 	}
 }
 
-FUNC(hardware_driver_j_hdl_block_processing)
+TEST(hardware_driver, j_hdl_block_processing)
 {
 	static const int hdl_configuration_blob[] = {
 		1, 10001, -1000, 100
@@ -632,7 +633,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 	check_all_input_fifos_are_empty();
 }
 
-FUNC(hardware_driver_k_hdl_block_ping_pong)
+TEST(hardware_driver, k_hdl_block_ping_pong)
 {
 	static const int hdl_configuration_blob[] = {
 		1, 101, -1001, 10001
@@ -672,7 +673,7 @@ FUNC(hardware_driver_k_hdl_block_ping_pong)
 	run_hdl_test(ctrl, 6, 7, total_effect);
 }
 
-FUNC(hardware_driver_k_hdl_block_zig_zag)
+static void hardware_driver_k_hdl_block_zig_zag()
 {
 	static const int hdl_configuration_blob[] = {
 		7, -17, 1000001, 10001
