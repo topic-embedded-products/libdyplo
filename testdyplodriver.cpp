@@ -26,7 +26,47 @@ static int openFifo(int fifo, int access)
 	return ::open(name.str().c_str(), access);
 }
 
-struct hardware_driver {};
+static void hardware_driver_clean_all_routes()
+{
+	try
+	{
+		/* Clean all routes */
+		dyplo::HardwareContext ctx;
+		dyplo::HardwareControl ctrl(ctx);
+		ctrl.routeDeleteAll();
+	}
+	catch (const std::exception& ex)
+	{
+		std::cout << "ERROR in cleanup: " << ex.what() << std::endl;
+	}
+}
+
+struct hardware_driver 
+{
+};
+
+struct hardware_driver_hdl
+{
+	~hardware_driver_hdl()
+	{
+		static const int hdl_configuration_blob[4] = {0,0,0,0};
+		try
+		{
+			dyplo::HardwareContext ctx;
+			dyplo::HardwareControl ctrl(ctx);
+			ctrl.routeDeleteAll();
+			for (int block = 1; block < 3; ++block)
+			{
+				File hdl_config(ctx.openConfig(block, O_WRONLY));
+				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob));
+			}
+		}
+		catch (const std::exception& ex)
+		{
+			std::cout << "ERROR in cleanup: " << ex.what() << std::endl;
+		}
+	}
+};
 
 TEST(hardware_driver, a_control_multiple_open)
 {
@@ -633,7 +673,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 	check_all_input_fifos_are_empty();
 }
 
-TEST(hardware_driver, k_hdl_block_ping_pong)
+TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 {
 	static const int hdl_configuration_blob[] = {
 		1, 101, -1001, 10001
@@ -671,6 +711,7 @@ TEST(hardware_driver, k_hdl_block_ping_pong)
 		}
 	}
 	run_hdl_test(ctrl, 6, 7, total_effect);
+	check_all_input_fifos_are_empty();
 }
 
 static void hardware_driver_k_hdl_block_zig_zag()
@@ -710,4 +751,5 @@ static void hardware_driver_k_hdl_block_zig_zag()
 		}
 	}
 	run_hdl_test(ctrl, 4, 5, total_effect);
+	check_all_input_fifos_are_empty();
 }
