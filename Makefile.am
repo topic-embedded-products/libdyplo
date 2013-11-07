@@ -28,6 +28,7 @@ libdyplo_la_SOURCES = \
     hardware.cpp \
     $(dyplo_libinclude_HEADERS)
 libdyplo_la_CXXFLAGS = $(OPENMP_CFLAGS)
+libdyplo_la_CPPFLAGS = -DBITSTREAM_DATA_PATH=\"${datadir}/bitstreams\"
 dyplo_libincludedir = $(includedir)/dyplo
 
 TESTS = testdyplo

@@ -149,6 +149,7 @@ public:
 
 TEST(hardware_programmer, find_bitstreams)
 {
+	dyplo::HardwareContext context("/tmp/dyplo"); /* Fake device */
 	LotsOfFiles f;
 	f.dir("/tmp/dyplo_func_1");
 	f.file("/tmp/dyplo_func_1/1.bit");
@@ -161,13 +162,14 @@ TEST(hardware_programmer, find_bitstreams)
 	f.file("/tmp/dyplo_func_2/function2partition12.bit");
 	f.file("/tmp/dyplo_func_2/2-21-and-more.bit");
 	unsigned int parts;
-	parts = dyplo::HardwareContext::getAvailablePartitions("/tmp", "dyplo_func_1");
+	context.setBitstreamBasepath("/tmp");
+	parts = context.getAvailablePartitions("dyplo_func_1");
 	EQUAL((unsigned)(1<<31)|(1<<13)|(1<<2)|(1<<1), parts);
-	parts = dyplo::HardwareContext::getAvailablePartitions("/tmp", "dyplo_func_2");
+	parts = context.getAvailablePartitions("dyplo_func_2");
 	EQUAL((unsigned)(1<<21)|(1<<12)|(1<<2)|(1<<1), parts);
 	std::string filename;
-	filename = dyplo::HardwareContext::findPartition("/tmp", "dyplo_func_2", 12);
+	filename = context.findPartition("dyplo_func_2", 12);
 	EQUAL("/tmp/dyplo_func_2/function2partition12.bit", filename);
-	filename = dyplo::HardwareContext::findPartition("/tmp", "dyplo_func_2", 11);
+	filename = context.findPartition("dyplo_func_2", 11);
 	EQUAL("", filename); /* not found */
 }

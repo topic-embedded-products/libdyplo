@@ -53,11 +53,13 @@ namespace dyplo
 	}
 	
 	HardwareContext::HardwareContext():
-		prefix(DYPLO_DRIVER_PREFIX)
+		prefix(DYPLO_DRIVER_PREFIX),
+		bitstream_basepath(BITSTREAM_DATA_PATH)
 	{}
 	
 	HardwareContext::HardwareContext(const std::string& driver_prefix):
-		prefix(driver_prefix)
+		prefix(driver_prefix),
+		bitstream_basepath(BITSTREAM_DATA_PATH)
 	{
 	}
 	
@@ -227,10 +229,10 @@ namespace dyplo
 		return -1;
 	}
 	
-	unsigned int HardwareContext::getAvailablePartitions(const char* basepath, const char* function)
+	unsigned int HardwareContext::getAvailablePartitions(const char* function)
 	{
 		unsigned int result = 0;
-		std::string path(basepath);
+		std::string path(bitstream_basepath);
 		path += '/';
 		path += function;
 		DirectoryListing dir(path.c_str());
@@ -251,9 +253,9 @@ namespace dyplo
 		return result;
 	}
 	
-	std::string HardwareContext::findPartition(const char* basepath, const char* function, int partition)
+	std::string HardwareContext::findPartition(const char* function, int partition)
 	{
-		std::string path(basepath);
+		std::string path(bitstream_basepath);
 		path += '/';
 		path += function;
 		DirectoryListing dir(path.c_str());

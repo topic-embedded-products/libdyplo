@@ -24,10 +24,13 @@ namespace dyplo
 		static unsigned int program(const char* filename);
 		
 		/* Find bitfiles in directories */
-		static unsigned int getAvailablePartitions(const char* basepath, const char* function);
-		static std::string findPartition(const char* basepath, const char* function, int partition);
+		unsigned int getAvailablePartitions(const char* function);
+		std::string findPartition(const char* function, int partition);
+		void setBitstreamBasepath(const std::string& value) { bitstream_basepath = value; }
+		void setBitstreamBasepath(const char* value) { bitstream_basepath = value; }
 	protected:
 		std::string prefix;
+		std::string bitstream_basepath;
 	};
 	
 	class HardwareControl: public File
