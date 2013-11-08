@@ -11,6 +11,7 @@ dyplo_libinclude_HEADERS = \
     thread.hpp \
     queue.hpp \
     fileio.hpp \
+    mmapio.hpp \
     directoryio.hpp \
     filequeue.hpp \
     hardware.hpp \
