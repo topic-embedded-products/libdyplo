@@ -714,7 +714,7 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 	check_all_input_fifos_are_empty();
 }
 
-static void hardware_driver_k_hdl_block_zig_zag()
+TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 {
 	static const int hdl_configuration_blob[] = {
 		7, -17, 1000001, 10001
