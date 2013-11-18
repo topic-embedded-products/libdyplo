@@ -226,7 +226,7 @@ TEST(hardware_driver, e_transmit_loop)
 	}
 }
 
-ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
+ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0, int timeout_us = 0)
 {
 	const int blocksize = 1024;
 	/* Fill it until it is full */
@@ -240,8 +240,15 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0)
 			buffer[i] = ((total_written >> 2) + i) + signature;
 		ssize_t written = fifo_out.write(buffer, blocksize*sizeof(buffer[0]));
 		total_written += written;
+		
 		if (written < (ssize_t)(blocksize*sizeof(buffer[0])))
-			break;
+		{
+			struct timeval timeout;
+			timeout.tv_sec = 0;
+			timeout.tv_usec = timeout_us;
+			if (!fifo_out.poll_for_outgoing_data(&timeout))
+				break;
+		}
 	}
 	delete [] buffer;
 	
@@ -621,16 +628,23 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 			EQUAL(data[i] + total_effect, buffer[i]);
 	}
 	{
-		File fifo_out(ctrl.openFifo(6, O_WRONLY));
+		File fifo_out(ctrl.openFifo(from_cpu_fifo, O_WRONLY));
 		const int signature = 0x1000000;
 		/* Set output fifo in non-blocking mode */
 		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
-		ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature);
+		ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, 2000);
 		CHECK(total_written > 0);
 		CHECK(total_written > 8000); /* We should be able to dump a LOT */
 		/* Status must indicate that there is no room */
-		CHECK(! fifo_out.poll_for_outgoing_data(0));
-		File fifo_in(ctrl.openFifo(7, O_RDONLY));
+		if (fifo_out.poll_for_outgoing_data(0))
+		{
+			std::ostringstream msg;
+			msg << "Logic reports still room available after writing "
+				<< total_written << " bytes and having reported that "
+				" there was no more room.";
+			FAIL(msg.str());
+		}
+		File fifo_in(ctrl.openFifo(to_cpu_fifo, O_RDONLY));
 		CHECK(fifo_in.poll_for_incoming_data(1) ); /*  has data */
 		EQUAL(0, dyplo::set_non_blocking(fifo_in.handle));
 		const size_t blocksize = 1024*sizeof(int);

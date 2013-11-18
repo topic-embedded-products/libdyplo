@@ -10,32 +10,42 @@ namespace dyplo
 			throw dyplo::IOException();
 	}
 
-	bool File::poll_for_incoming_data(int timeout_in_seconds)
+	bool File::poll_for_incoming_data(struct timeval *timeout)
 	{
-		struct timeval timeout;
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(handle, &fds);
-		timeout.tv_sec = timeout_in_seconds;
-		timeout.tv_usec = 0;
-		int status = select(handle+1, &fds, NULL, NULL, &timeout);
+		int status = select(handle+1, &fds, NULL, NULL, timeout);
 		if (status < 0)
 			throw dyplo::IOException();
 		return status && FD_ISSET(handle, &fds);
 	}
 
-	bool File::poll_for_outgoing_data(int timeout_in_seconds)
+	bool File::poll_for_outgoing_data(struct timeval *timeout)
 	{
-		struct timeval timeout;
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(handle, &fds);
-		timeout.tv_sec = timeout_in_seconds;
-		timeout.tv_usec = 0;
-		int status = select(handle+1, NULL, &fds, NULL, &timeout);
+		int status = select(handle+1, NULL, &fds, NULL, timeout);
 		if (status < 0)
 			throw dyplo::IOException();
 		return status && FD_ISSET(handle, &fds);
+	}
+
+	bool File::poll_for_incoming_data(int timeout_in_seconds)
+	{
+		struct timeval timeout;
+		timeout.tv_sec = timeout_in_seconds;
+		timeout.tv_usec = 0;
+		return poll_for_incoming_data(&timeout);
+	}
+
+	bool File::poll_for_outgoing_data(int timeout_in_seconds)
+	{
+		struct timeval timeout;
+		timeout.tv_sec = timeout_in_seconds;
+		timeout.tv_usec = 0;
+		return poll_for_outgoing_data(&timeout);
 	}
 
 	off_t File::get_size(const char* path)

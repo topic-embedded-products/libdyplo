@@ -57,6 +57,8 @@ namespace dyplo
 		
 		bool poll_for_incoming_data(int timeout_in_seconds);
 		bool poll_for_outgoing_data(int timeout_in_seconds);
+		bool poll_for_incoming_data(struct timeval *timeout);
+		bool poll_for_outgoing_data(struct timeval *timeout);
 		
 		static off_t get_size(const char* path);
 	private:
