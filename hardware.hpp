@@ -52,5 +52,13 @@ namespace dyplo
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
 		void routeDelete(char node);
+		
+		unsigned int getEnabledNodes();
+		void enableNodes(unsigned int mask);
+		void disableNodes(unsigned int mask);
+		
+		bool isNodeEnabled(int node) { return (getEnabledNodes() & (1<<node)) != 0; }
+		void enableNode(int node) { enableNodes(1<<node); }
+		void disableNode(int node) { disableNodes(1<<node); }
 	};
 }

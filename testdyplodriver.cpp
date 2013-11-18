@@ -116,7 +116,7 @@ static void connect_all_fifos_in_loop()
 	dyplo::HardwareControl(ctrl).routeAdd(routes, 32);
 }
 
-TEST(hardware_driver, d_io_control)
+TEST(hardware_driver, d_io_control_route)
 {
 	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl::Route routes[64];
@@ -199,6 +199,27 @@ TEST(hardware_driver, d_io_control)
 		EQUAL(fifo, routes[fifo].dstFifo);
 	}
 }
+
+TEST(hardware_driver, d_io_control_backplane)
+{
+	dyplo::HardwareContext ctx;
+	dyplo::HardwareControl ctrl(ctx);
+	
+	ctrl.enableNode(0);
+	CHECK(ctrl.isNodeEnabled(0));
+	ctrl.disableNode(1);
+	CHECK(!ctrl.isNodeEnabled(1));
+	CHECK(ctrl.isNodeEnabled(0));
+	ctrl.enableNode(1);
+	CHECK(ctrl.isNodeEnabled(1));
+	ctrl.disableNode(2);
+	CHECK(!ctrl.isNodeEnabled(2));
+	CHECK(ctrl.isNodeEnabled(1));
+	CHECK(ctrl.isNodeEnabled(0));
+	ctrl.enableNode(2);
+	CHECK(ctrl.isNodeEnabled(2));
+}
+
 
 TEST(hardware_driver, e_transmit_loop)
 {
