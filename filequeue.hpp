@@ -45,7 +45,7 @@ namespace dyplo
 			void reset();
 	};
 
-	template <class T> class FileOutputQueue
+	template <class T, bool synchronous = false> class FileOutputQueue
 	{
 	public:
 		typedef T Element;
@@ -116,7 +116,15 @@ namespace dyplo
 		{
 			m_bytes_to_write = count * sizeof(T);
 			m_writeout_position = (char*)m_buff;
-			write_buffer();
+			if (synchronous)
+			{
+				while (write_buffer())
+					m_scheduler.wait_writeable(m_file_handle);
+			}
+			else
+			{
+				write_buffer();
+			}
 		}
 
 		void push_one(const T data)
@@ -190,6 +198,11 @@ namespace dyplo
 				{
 					if (errno == EAGAIN)
 					{
+						if (count_min == 0)
+						{ /* Non blocking requested, return what we have */
+							m_size = m_carry + (bytes_read / sizeof(T));
+							return m_size;
+						}
 						m_scheduler.wait_readable(m_file_handle);
 					}
 					else

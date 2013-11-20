@@ -307,3 +307,47 @@ TEST(a_file_queue, interrupt_resume)
 	count = input.begin_read(data, 10);
 	YAFFUT_CHECK(count > 0);
 }
+
+struct file_scheduler {};
+
+TEST(a_file_queue, write_flush_all)
+{
+	const unsigned int write_buffer_count = 4096;
+	const unsigned int read_buffer_count = 2048;
+	const unsigned int known_os_buffer_size = 64*1024;
+	dyplo::Pipe p;
+	dyplo::FilePollScheduler scheduler;
+	dyplo::FileOutputQueue<char, true> output(scheduler, p.write_handle(), write_buffer_count);
+	dyplo::FileInputQueue<char> input(scheduler, p.read_handle(), read_buffer_count);
+	char* data = NULL;
+	unsigned int count;
+	int num_written = 0;
+	int num_read = 0;
+
+	while(num_written < known_os_buffer_size)
+	{
+		/* Wait until write would block on the OS fifo */
+		count = output.begin_write(data, 0);
+		if (count == 0)
+			break;
+		YAFFUT_EQUAL(write_buffer_count, count);
+		output.end_write(count);
+		num_written += count;
+	}
+
+	while (num_read < num_written)
+	{
+		count = input.begin_read(data, 0);
+		if (count < read_buffer_count)
+		{
+			std::ostringstream msg;
+			msg << "No more data to read at " << num_read << " of " << num_written << " bytes.";
+			FAIL(msg.str());
+		}
+		input.end_read(count);
+		num_read += count;
+	}
+
+	count = output.begin_write(data, 0);
+	CHECK(count > 0);
+}
