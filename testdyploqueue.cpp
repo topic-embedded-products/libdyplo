@@ -351,3 +351,63 @@ TEST(a_file_queue, write_flush_all)
 	count = output.begin_write(data, 0);
 	CHECK(count > 0);
 }
+
+TEST(a_file_queue, read_carry_only)
+{
+	const unsigned int write_buffer_count = 4096;
+	const unsigned int read_buffer_count = 2048;
+	dyplo::Pipe p;
+	dyplo::FilePollScheduler scheduler;
+	dyplo::FileOutputQueue<int, true> output(scheduler, p.write_handle(), write_buffer_count);
+	dyplo::FileInputQueue<int> input(scheduler, p.read_handle(), read_buffer_count);
+	int* data = NULL;
+	unsigned int count;
+	int num_read = 0;
+	int counter = 1;
+	unsigned int num_written = 0;
+
+	for (int repeat = 4; repeat != 0; --repeat)
+	{
+		/* Wait until write would block on the OS fifo */
+		count = output.begin_write(data, write_buffer_count);
+		YAFFUT_EQUAL(write_buffer_count, count);
+		for (unsigned int i=0; i<count; ++i)
+			data[i] = counter++;
+		output.end_write(count);
+		num_written += count;
+	}
+	
+	counter = 1;
+	count = input.begin_read(data, 1024);
+	CHECK(count >= 1024);
+	for (unsigned int i=0; i<100; ++i) 
+	{
+		EQUAL(counter, data[i]);
+		++counter;
+	}
+	input.end_read(100);
+	count = input.begin_read(data, 0);
+	CHECK(count >= 924);
+	for (unsigned int i=0; i<100; ++i) 
+	{
+		EQUAL(counter, data[i]);
+		++counter;
+	}
+	input.end_read(100);
+	count = input.begin_read(data, 0);
+	CHECK(count >= 824);
+	for (unsigned int i=0; i<100; ++i) 
+	{
+		EQUAL(counter, data[i]);
+		++counter;
+	}
+	input.end_read(100);
+	count = input.begin_read(data, 1024);
+	CHECK(count >= 1024);
+	for (unsigned int i=0; i<count; ++i) 
+	{
+		EQUAL(counter, data[i]);
+		++counter;
+	}
+	input.end_read(count);
+}

@@ -788,3 +788,121 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 	run_hdl_test(ctrl, 4, 5, total_effect);
 	check_all_input_fifos_are_empty();
 }
+
+static const int how_many_blocks = 1024;
+
+static void* thread_send_many_blocks(void* arg)
+{
+	dyplo::FileOutputQueue<int> *q = (dyplo::FileOutputQueue<int>*)arg;
+	int counter = 1;
+	try
+	{
+		int* data;
+		for (int block = 0; block < how_many_blocks; ++block)
+		{
+			unsigned int count = q->begin_write(data, 2048);
+			EQUAL(2048, count);
+			for (unsigned int i=0; i<count; ++i)
+			{
+				data[i] = counter;
+				++counter;
+			}
+			q->end_write(count);
+		}
+		/* Flush the buffer */
+		q->begin_write(data, 2048);
+	}
+	catch (const std::exception& ex)
+	{
+		return (void*)1;
+	}
+	return NULL;
+}
+
+
+TEST(hardware_driver_hdl, m_hdl_audio_style)
+{
+	static const int hdl_configuration_blob[] = {
+		0, 0, 0, 0,
+	};
+	/* Set up route: Loop through the HDL blocks four times */
+	static dyplo::HardwareControl::Route routes[] = {
+		{0, 1, 0, 0}, /* 0.0 -> 1.0 */
+		{0, 0, 0, 1}, /* 1.0 -> 0.0 */
+	};
+	dyplo::HardwareContext ctrl;
+	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	/* configure HDL block with coefficients */
+	for (int block = 1; block < 3; ++block)
+	{
+		try
+		{
+			File hdl_config(ctrl.openConfig(block, O_WRONLY));
+			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
+				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+		}
+		catch (const dyplo::IOException& ex)
+		{
+			FAIL(ex.what());
+		}
+	}
+
+	{
+		dyplo::FilePollScheduler scheduler;
+		dyplo::File output_file(ctrl.openFifo(0, O_WRONLY));
+		dyplo::File input_file(ctrl.openFifo(0, O_RDONLY));
+		dyplo::FileOutputQueue<int> output(scheduler, output_file, 2048);
+		dyplo::FileInputQueue<int> input(scheduler, input_file, 2048);
+		dyplo::Thread sender;
+		sender.start(thread_send_many_blocks, &output);
+		try
+		{
+			int* data;
+			unsigned int count;
+			unsigned int prev_count = 0;
+			unsigned int prev_raw_count = 0;
+			int counter = 1;
+			unsigned int words_read = 0;
+			while(words_read < how_many_blocks * 2048)
+			{
+				unsigned int raw_count = input.begin_read(data, 2);
+				CHECK(raw_count != 0);
+				CHECK(raw_count <= 2048);
+				if (raw_count > 142)
+					count = 142;
+				else
+					count = raw_count;
+				for (unsigned int i = 0; i < count; ++i)
+				{
+					if (data[i] != counter)
+					{
+						std::ostringstream msg; \
+						msg << "Mismatch at " << i << "(+" << words_read << ") expected: " 
+							<< (counter) << " actual: " << data[i]
+							<< " diff:" << (data[i] - counter);
+						if (i < count - 2)
+							msg << "\nNext data: " << data[i+1] << " "<< data[i+2]
+								<< " .. " << data[count-1];
+						msg << "\nRemaining: " << (count - i) << " words\n";
+						msg << "count=" << count << " raw_count=" << raw_count
+						    << " data=" << data << " prev_count=" << prev_count
+						    << " prev_raw_count=" << prev_raw_count;
+						FAIL(msg.str());
+					}
+					++counter;
+				}
+				input.end_read(count);
+				words_read += count;
+				prev_count = count;
+				prev_raw_count = raw_count;
+			}
+		}
+		catch (const std::exception& ex)
+		{
+			output.interrupt_write();
+			input.interrupt_read();
+			throw;
+		}
+	}
+	check_all_input_fifos_are_empty();
+}

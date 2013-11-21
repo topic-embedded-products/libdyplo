@@ -231,6 +231,11 @@ namespace dyplo
 					memmove(m_buff, m_buff + count, m_carry * sizeof(T));
 				else
 					memcpy(m_buff, m_buff + count, m_carry * sizeof(T));
+				m_size = m_carry;
+			}
+			else
+			{
+				m_size = 0;
 			}
 		}
 		
