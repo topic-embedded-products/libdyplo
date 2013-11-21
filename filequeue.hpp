@@ -187,8 +187,6 @@ namespace dyplo
 				 buffer_position = (char*)buffer;
 			}
 			int bytes_to_read = count_min * sizeof(T);
-			if (bytes_to_read) /* Blocking? poll first */
-				m_scheduler.wait_readable(m_file_handle);
 			int bytes_read = 0;
 			do
 			{
@@ -224,10 +222,15 @@ namespace dyplo
 
 		void end_read(unsigned int count)
 		{
+			if (count == 0)
+				return;
 			m_carry = m_size - count;
-			if (m_carry && count)
+			if (m_carry)
 			{
-				memcpy(m_buff, m_buff + count, m_carry * sizeof(T));
+				if (m_carry > count)
+					memmove(m_buff, m_buff + count, m_carry * sizeof(T));
+				else
+					memcpy(m_buff, m_buff + count, m_carry * sizeof(T));
 			}
 		}
 		
