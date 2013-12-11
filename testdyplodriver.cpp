@@ -655,7 +655,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 		ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, 2000);
 		CHECK(total_written > 0);
-		CHECK(total_written > 8000); /* We should be able to dump a LOT */
+		CHECK(total_written > 1600); /* At least some queues must fill up */
 		/* Status must indicate that there is no room */
 		if (fifo_out.poll_for_outgoing_data(0))
 		{
