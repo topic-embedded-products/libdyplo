@@ -10,6 +10,11 @@
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
+/* In future, retrieve number of fifo's and nodes from driver. */
+#define DYPLO_CPU_FIFO_COUNT	12
+
+/* Define "eternity" as a 5 second wait */
+#define VERY_LONG_TIMEOUT_US	5000000
 
 using dyplo::File;
 
@@ -106,14 +111,14 @@ TEST(hardware_driver, c_fifo_single_open_rw_access)
 static void connect_all_fifos_in_loop()
 {
 	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl::Route routes[32];
-	for (int i = 0; i < 32; ++i) {
+	dyplo::HardwareControl::Route routes[DYPLO_CPU_FIFO_COUNT];
+	for (int i = 0; i < DYPLO_CPU_FIFO_COUNT; ++i) {
 		routes[i].srcNode = 0;
 		routes[i].srcFifo = i;
 		routes[i].dstNode = 0;
 		routes[i].dstFifo = i;
 	}
-	dyplo::HardwareControl(ctrl).routeAdd(routes, 32);
+	dyplo::HardwareControl(ctrl).routeAdd(routes, DYPLO_CPU_FIFO_COUNT);
 }
 
 TEST(hardware_driver, d_io_control_route)
@@ -190,8 +195,8 @@ TEST(hardware_driver, d_io_control_route)
 	connect_all_fifos_in_loop();
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(32, n_routes);
-	for (int fifo=0; fifo<32; ++fifo)
+	EQUAL(DYPLO_CPU_FIFO_COUNT, n_routes);
+	for (int fifo=0; fifo<DYPLO_CPU_FIFO_COUNT; ++fifo)
 	{
 		EQUAL(0, routes[fifo].srcNode);
 		EQUAL(fifo, routes[fifo].srcFifo);
@@ -224,7 +229,7 @@ TEST(hardware_driver, d_io_control_backplane)
 TEST(hardware_driver, e_transmit_loop)
 {
 	connect_all_fifos_in_loop();
-	for (int fifo=0; fifo<32; ++fifo)
+	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
 	{
 		File fifo_in(openFifo(fifo, O_RDONLY));
 		File fifo_out(openFifo(fifo, O_WRONLY));
@@ -242,7 +247,18 @@ TEST(hardware_driver, e_transmit_loop)
 			bytes = read(fifo_in.handle, received, bytes);
 			EQUAL((ssize_t)sizeof(buffer), bytes);
 			for (unsigned int i=0; i<sizeof(buffer)/sizeof(buffer[0]); ++i)
-				EQUAL((int)(i + (repeats * 1000 * i)), received[i]);
+			{
+				if ((int)(i + (repeats * 1000 * i)) != received[i])
+				{
+					std::ostringstream msg;
+					msg << "mismatch, fifo: " << fifo
+						<< " repeat: " << (4-repeats)
+						<< " sample: " << i
+						<< " expected: " << (int)(i + (repeats * 1000 * i))
+						<< " actual: " << received[i];
+					FAIL(msg.str());
+				}
+			}
 		}
 	}
 }
@@ -313,7 +329,7 @@ void hardware_driver_poll_single(int fifo)
 	/* Set output fifo in non-blocking mode */
 	EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 
-	ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature);
+	ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, VERY_LONG_TIMEOUT_US);
 	CHECK(total_written > 0);
 	/* The write fifo holds 255 words, the read fifo 1023. So in total,
 	 * the fifo's cannot contain more than 5k bytes. If the total number
@@ -360,7 +376,7 @@ void hardware_driver_poll_single(int fifo)
 TEST(hardware_driver, f_poll)
 {
 	connect_all_fifos_in_loop();
-	for (int i = 0; i < 32; ++i)
+	for (int i = 0; i < DYPLO_CPU_FIFO_COUNT; ++i)
 	{
 		try
 		{
@@ -421,7 +437,7 @@ void* thread_read_data(void* arg)
 void check_all_input_fifos_are_empty()
 {
 	std::ostringstream msg;
-	for (int fifo = 0; fifo < 32; ++fifo)
+	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
 	{
 		File fifo_in(openFifo(fifo, O_RDONLY));
 		
@@ -550,7 +566,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 TEST(hardware_driver, h_irq_driven_write)
 {
 	connect_all_fifos_in_loop();
-	for (int fifo = 0; fifo < 32; ++fifo)
+	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
 		hardware_driver_irq_driven_write_single(fifo);
 	check_all_input_fifos_are_empty();
 }
@@ -559,10 +575,10 @@ TEST(hardware_driver, i_cpu_block_crossbar)
 {
 	/* Set up weird routing */
 	static dyplo::HardwareControl::Route routes[] = {
-		{0, 0, 16, 0}, 
-		{17,0, 18, 0},
-		{1, 0, 31, 0},
-		{31,0, 4, 0},
+		{0, 0, 5, 0}, 
+		{4, 0, 8, 0},
+		{1, 0, DYPLO_CPU_FIFO_COUNT-1, 0},
+		{DYPLO_CPU_FIFO_COUNT-1,0, 4, 0},
 	};
 	dyplo::HardwareContext ctrl;
 	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
