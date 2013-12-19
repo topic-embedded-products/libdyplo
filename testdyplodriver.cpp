@@ -484,7 +484,7 @@ static void hardware_driver_irq_driven_read_single(int fifo)
 TEST(hardware_driver, g_irq_driven_read)
 {
 	connect_all_fifos_in_loop();
-	for (int fifo = 31; fifo >= 0; --fifo) /* go back, variation */
+	for (int fifo = DYPLO_CPU_FIFO_COUNT-1; fifo >= 0; --fifo) /* go back, variation */
 		hardware_driver_irq_driven_read_single(fifo);
 	check_all_input_fifos_are_empty();
 }
