@@ -25,5 +25,9 @@ namespace dyplo
 		{
 			pthread_cond_wait(&m_handle, mutex);
 		}
+		int timedwait(pthread_mutex_t* mutex, const struct timespec* abstime)
+		{
+			return pthread_cond_timedwait(&m_handle, mutex, abstime);
+		}
 	};
 }
