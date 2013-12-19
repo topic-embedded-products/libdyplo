@@ -14,7 +14,7 @@ namespace dyplo
 			handle(::opendir(path))
 		{
 			if (!handle)
-				throw dyplo::IOException();
+				throw dyplo::IOException(path);
 		}
 		
 		~DirectoryListing()

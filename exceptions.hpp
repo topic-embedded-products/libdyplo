@@ -38,8 +38,14 @@ namespace dyplo
 	{
 	public:
 		IOException();
+		IOException(const char* extra_context);
 		IOException(int error_code);
+		IOException(const char* extra_context, int error_code);
+		~IOException() throw () {} /* Fails compiling without this */
 		virtual const char* what() const throw();
 		int m_errno;
+		std::string context;
+	protected:
+		mutable std::string buffer; /* mutable because of "const" what */
 	};
 }

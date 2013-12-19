@@ -21,14 +21,32 @@ namespace dyplo
 		m_errno(errno)
 	{
 	}
+	IOException::IOException(const char* extra_context):
+		m_errno(errno),
+		context(extra_context)
+	{
+	}
 	IOException::IOException(int code):
 		m_errno(code)
+	{
+	}
+	IOException::IOException(const char* extra_context, int code):
+		m_errno(code),
+		context(extra_context)
 	{
 	}
 
 	const char* IOException::what() const throw()
 	{
-		return strerror(m_errno);
+		if (context.empty())
+			return strerror(m_errno);
+		if (buffer.empty())
+		{
+			buffer = strerror(m_errno);
+			buffer += " context: ";
+			buffer += context;
+		}
+		return buffer.c_str();
 	}
 	
 	int set_non_blocking(int file_handle)

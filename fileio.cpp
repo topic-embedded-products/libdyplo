@@ -7,7 +7,7 @@ namespace dyplo
 		handle(::open(filename, access))
 	{
 		if (handle == -1)
-			throw dyplo::IOException();
+			throw dyplo::IOException(filename);
 	}
 
 	bool File::poll_for_incoming_data(struct timeval *timeout)
@@ -17,7 +17,7 @@ namespace dyplo
 		FD_SET(handle, &fds);
 		int status = select(handle+1, &fds, NULL, NULL, timeout);
 		if (status < 0)
-			throw dyplo::IOException();
+			throw dyplo::IOException(__func__);
 		return status && FD_ISSET(handle, &fds);
 	}
 
@@ -28,7 +28,7 @@ namespace dyplo
 		FD_SET(handle, &fds);
 		int status = select(handle+1, NULL, &fds, NULL, timeout);
 		if (status < 0)
-			throw dyplo::IOException();
+			throw dyplo::IOException(__func__);
 		return status && FD_ISSET(handle, &fds);
 	}
 
@@ -53,7 +53,7 @@ namespace dyplo
 		struct stat info;
 		int status = ::stat(path, &info);
 		if (status < 0)
-			throw dyplo::IOException();
+			throw dyplo::IOException(path);
 		return info.st_size;
 	}
 }

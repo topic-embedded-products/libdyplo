@@ -127,7 +127,7 @@ public:
 	void dir(const char* filename, int mode = S_IRWXU)
 	{
 		if (::mkdir(filename, mode) != 0)
-			throw dyplo::IOException();
+			throw dyplo::IOException(filename);
 		dirs.push_back(filename);
 	}
 	void cleanup()

@@ -289,7 +289,7 @@ namespace dyplo
 	void HardwareControl::routeDeleteAll()
 	{
 		if (::ioctl(handle, DYPLO_IOCROUTE_CLEAR) != 0)
-			throw IOException();
+			throw IOException(__func__);
 	}
 
 	void HardwareControl::routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo)
@@ -297,7 +297,7 @@ namespace dyplo
 		struct dyplo_route_item_t route =
 			{dstFifo, dstNode, srcFifo, srcNode};
 		if (::ioctl(handle, DYPLO_IOCTROUTE, route) != 0)
-			throw IOException();
+			throw IOException(__func__);
 	}
 
 	int HardwareControl::routeGetAll(Route* items, int n_items)
@@ -314,14 +314,14 @@ namespace dyplo
 		routes.n_routes = n_items;
 		routes.proutes = (struct dyplo_route_item_t*)items;
 		if (::ioctl(handle, DYPLO_IOCSROUTE, &routes) != 0)
-			throw IOException();
+			throw IOException(__func__);
 	}
 	
 	void HardwareControl::routeDelete(char node)
 	{
 		int arg = node;
 		if (::ioctl(handle, DYPLO_IOCTROUTE_DELETE, arg) != 0)
-			throw IOException();
+			throw IOException(__func__);
 	}
 	
 	unsigned int HardwareControl::getEnabledNodes()
@@ -336,13 +336,13 @@ namespace dyplo
 	{
 		int result = ::ioctl(handle, DYPLO_IOCTBACKPLANE_ENABLE, mask);
 		if (result < 0)
-			throw IOException();
+			throw IOException(__func__);
 	}
 
 	void HardwareControl::disableNodes(unsigned int mask)
 	{
 		int result = ::ioctl(handle, DYPLO_IOCTBACKPLANE_DISABLE, mask);
 		if (result < 0)
-			throw IOException();
+			throw IOException(__func__);
 	}
 }
