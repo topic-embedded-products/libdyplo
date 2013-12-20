@@ -329,7 +329,8 @@ void hardware_driver_poll_single(int fifo)
 	/* Set output fifo in non-blocking mode */
 	EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 
-	ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, VERY_LONG_TIMEOUT_US);
+	/* Write until we can't write no more for 2ms */
+	ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, 2000);
 	CHECK(total_written > 0);
 	/* The write fifo holds 255 words, the read fifo 1023. So in total,
 	 * the fifo's cannot contain more than 5k bytes. If the total number
