@@ -251,6 +251,42 @@ TEST(hardware_driver, d_io_control_backplane)
 	CHECK(ctrl.isNodeEnabled(0));
 	ctrl.enableNode(2);
 	CHECK(ctrl.isNodeEnabled(2));
+	
+	dyplo::HardwareConfig cfg1(ctx, 1);
+	CHECK(cfg1.isNodeEnabled());
+	dyplo::HardwareConfig cfg2(ctx, 2);
+	CHECK(cfg2.isNodeEnabled());
+	cfg1.disableNode();
+	CHECK(!cfg1.isNodeEnabled());
+	CHECK(ctrl.isNodeEnabled(0));
+	CHECK(!ctrl.isNodeEnabled(1));
+	CHECK(ctrl.isNodeEnabled(2));
+	cfg1.enableNode();
+	cfg2.disableNode();
+	CHECK(cfg1.isNodeEnabled());
+	CHECK(!cfg2.isNodeEnabled());
+	cfg2.enableNode();
+	CHECK(cfg2.isNodeEnabled());
+}
+
+TEST(hardware_driver, d_io_control_fifo_reset)
+{
+	dyplo::HardwareContext ctx;
+	dyplo::HardwareControl ctrl(ctx);
+	dyplo::HardwareConfig cfg_cpu(ctx, 0); /* open CPU node */
+	ctrl.routeAddSingle(0,0,0,0);
+	
+	File fifo_in(openFifo(0, O_RDONLY));
+	File fifo_out(openFifo(0, O_WRONLY));
+	int data[16];
+	fifo_out.write(data, sizeof(data));
+	// Check data availabe
+	CHECK(fifo_in.poll_for_incoming_data(1) );
+	cfg_cpu.resetReadFifos(0x1);
+	cfg_cpu.resetWriteFifos(0x1);
+	// Data is gone now
+	CHECK(! fifo_in.poll_for_incoming_data(0) );
+	ctrl.routeDeleteAll();
 }
 
 

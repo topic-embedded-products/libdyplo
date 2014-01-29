@@ -64,6 +64,8 @@ struct dyplo_route_t  {
 #define DYPLO_IOC_BACKPLANE_STATUS	0x08
 #define DYPLO_IOC_BACKPLANE_DISABLE	0x09
 #define DYPLO_IOC_BACKPLANE_ENABLE	0x0A
+#define DYPLO_IOC_RESET_FIFO_WRITE	0x0C
+#define DYPLO_IOC_RESET_FIFO_READ	0x0D
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -82,6 +84,11 @@ struct dyplo_route_t  {
  * you want to replace a node using partial configuration. Operations are atomic. */
 #define DYPLO_IOCTBACKPLANE_ENABLE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_BACKPLANE_ENABLE)
 #define DYPLO_IOCTBACKPLANE_DISABLE  _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_BACKPLANE_DISABLE)
+/* Reset FIFO data (i.e. throw it away). Can be applied to config
+ * nodes to reset its incoming fifos (argument is bitmask for queues to
+ * reset), or to a CPU read/write fifo (argument ignored). */
+#define DYPLO_IOCRESET_FIFO_WRITE	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_RESET_FIFO_WRITE)
+#define DYPLO_IOCRESET_FIFO_READ	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_RESET_FIFO_READ)
 }
 
 namespace dyplo
@@ -370,6 +377,56 @@ namespace dyplo
 	void HardwareControl::disableNodes(unsigned int mask)
 	{
 		int result = ::ioctl(handle, DYPLO_IOCTBACKPLANE_DISABLE, mask);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+	
+	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)
+	{
+		int result = ::ioctl(file_descriptor, DYPLO_IOCRESET_FIFO_WRITE, mask);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	void HardwareConfig::resetWriteFifos(unsigned int mask)
+	{
+		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_WRITE, mask);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	void HardwareConfig::resetReadFifos(int file_descriptor, unsigned int mask)
+	{
+		int result = ::ioctl(file_descriptor, DYPLO_IOCRESET_FIFO_READ, mask);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	void HardwareConfig::resetReadFifos(unsigned int mask)
+	{
+		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_READ, mask);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	bool HardwareConfig::isNodeEnabled()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCQBACKPLANE_STATUS);
+		if (result < 0)
+			throw IOException();
+		return (result != 0);
+	}
+
+	void HardwareConfig::enableNode()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCTBACKPLANE_ENABLE);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	void HardwareConfig::disableNode()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCTBACKPLANE_DISABLE);
 		if (result < 0)
 			throw IOException(__func__);
 	}

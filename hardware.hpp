@@ -89,4 +89,19 @@ namespace dyplo
 		void enableNode(int node) { enableNodes(1<<node); }
 		void disableNode(int node) { disableNodes(1<<node); }
 	};
+	
+	class HardwareConfig: public File
+	{
+	public:
+		HardwareConfig(int file_descriptor): File(file_descriptor) {}
+		HardwareConfig(HardwareContext& context, int index, int access = O_RDWR):
+			File(context.openConfig(index, access)) {}
+		void resetWriteFifos(unsigned int mask);
+		void resetReadFifos(unsigned int mask);
+		static void resetWriteFifos(int file_descriptor, unsigned int mask);
+		static void resetReadFifos(int file_descriptor, unsigned int mask);
+		bool isNodeEnabled();
+		void enableNode();
+		void disableNode();
+	};
 }
