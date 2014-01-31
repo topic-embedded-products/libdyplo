@@ -33,7 +33,7 @@ libdyplo_la_CPPFLAGS = -DBITSTREAM_DATA_PATH=\"${datadir}/bitstreams\"
 dyplo_libincludedir = $(includedir)/dyplo
 
 TESTS = testdyplo
-bin_PROGRAMS = $(TESTS) testdyplodriver \
+bin_PROGRAMS = $(TESTS) testdyplodriver testdyplostress \
 	dyplodemoapp dyplodemocryptoapp dyplodemohdlapp
 
 testdyplo_SOURCES = yaffut.h \
@@ -45,6 +45,7 @@ testdyplo_SOURCES = yaffut.h \
 	testdyplosolver.cpp
 testdyplo_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 testdyplodriver_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
+testdyplostress_LDADD = libdyplo.la
 dyplodemoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 dyplodemocryptoapp_LDADD = libdyplo.la
 dyplodemohdlapp_LDADD = libdyplo.la
