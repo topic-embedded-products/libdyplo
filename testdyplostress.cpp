@@ -1,7 +1,7 @@
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
-#include <dyplo/hardware.hpp>
+#include "hardware.hpp"
 #include <errno.h>
 #include <vector>
 
