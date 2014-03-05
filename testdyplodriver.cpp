@@ -80,19 +80,25 @@ struct hardware_driver
 
 struct hardware_driver_hdl
 {
+	dyplo::HardwareContext context;
+	hardware_driver_hdl()
+	{
+		context.setProgramMode(true); /* partial */
+		for (int id = 1; id <= 4; ++id)
+		{
+			std::string filename =
+				context.findPartition("adder", id);
+			if (filename.empty())
+				std::cerr << "No 'adder' logic found for node " << id;
+			context.program(filename.c_str());
+		}
+	}
 	~hardware_driver_hdl()
 	{
-		static const int hdl_configuration_blob[4] = {0,0,0,0};
 		try
 		{
-			dyplo::HardwareContext ctx;
-			dyplo::HardwareControl ctrl(ctx);
+			dyplo::HardwareControl ctrl(context);
 			ctrl.routeDeleteAll();
-			for (int block = 1; block < 3; ++block)
-			{
-				File hdl_config(ctx.openConfig(block, O_WRONLY));
-				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob));
-			}
 		}
 		catch (const std::exception& ex)
 		{
@@ -149,7 +155,7 @@ static void connect_all_fifos_in_loop()
 	dyplo::HardwareControl(ctrl).routeAdd(routes, DYPLO_CPU_FIFO_COUNT);
 }
 
-TEST(hardware_driver, d_io_control_route)
+TEST(hardware_driver_hdl, d_io_control_route)
 {
 	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl::Route routes[64];
@@ -670,7 +676,7 @@ TEST(hardware_driver, i_cpu_block_crossbar)
 	}
 }
 
-TEST(hardware_driver, j_hdl_block_processing)
+TEST(hardware_driver_hdl, j_hdl_block_processing)
 {
 	static const int hdl_configuration_blob[] = {
 		1, 10001, -1000, 100
@@ -681,24 +687,23 @@ TEST(hardware_driver, j_hdl_block_processing)
 		{1, 2, 1, 0},
 		{1, 0, 1, 2}, /* HDL #2 connected to fifo 1 */
 	};
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	int data[] = {1, 2, 42000, -42000};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (int fifo = 0; fifo < 2; ++fifo)
 	{
 		/* configure HDL block with coefficients */
 		{
-			File hdl_config(ctrl.openConfig(fifo+1, O_WRONLY));
+			File hdl_config(context.openConfig(fifo+1, O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
 		/* Write some test data */
-		File hdl_in(ctrl.openFifo(fifo, O_WRONLY));
+		File hdl_in(context.openFifo(fifo, O_WRONLY));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
 		EQUAL((ssize_t)sizeof(data), bytes_written);
 		/* Read results and verify */
-		File hdl_out(ctrl.openFifo(fifo, O_RDONLY));
+		File hdl_out(context.openFifo(fifo, O_RDONLY));
 		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
 		int buffer[data_size];
 		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
@@ -809,15 +814,14 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 		{3, 2, 3, 1}, /* 1.3 -> 2.3 */
 		{7, 0, 3, 2}, /* 2.3 -> 0.7 */
 	};
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl(ctrl)
+	dyplo::HardwareControl(context)
 		.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
 	for (int block = 1; block < 3; ++block)
 	{
 		try
 		{
-			File hdl_config(ctrl.openConfig(block, O_WRONLY));
+			File hdl_config(context.openConfig(block, O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
@@ -826,7 +830,7 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 			FAIL(ex.what());
 		}
 	}
-	run_hdl_test(ctrl, 6, 7, total_effect);
+	run_hdl_test(context, 6, 7, total_effect);
 	check_all_input_fifos_are_empty();
 }
 
@@ -850,14 +854,13 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 		{3, 2, 2, 2}, /* -> 2.3 */
 		{5, 0, 3, 2}, /* 2.3 -> 0.5 */
 	};
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
 	for (int block = 1; block < 3; ++block)
 	{
 		try
 		{
-			File hdl_config(ctrl.openConfig(block, O_WRONLY));
+			File hdl_config(context.openConfig(block, O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
@@ -866,7 +869,7 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 			FAIL(ex.what());
 		}
 	}
-	run_hdl_test(ctrl, 4, 5, total_effect);
+	run_hdl_test(context, 4, 5, total_effect);
 	check_all_input_fifos_are_empty();
 }
 
@@ -911,14 +914,13 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 		{0, 1, 0, 0}, /* 0.0 -> 1.0 */
 		{0, 0, 0, 1}, /* 1.0 -> 0.0 */
 	};
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
 	for (int block = 1; block < 3; ++block)
 	{
 		try
 		{
-			File hdl_config(ctrl.openConfig(block, O_WRONLY));
+			File hdl_config(context.openConfig(block, O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
@@ -930,8 +932,8 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 
 	{
 		dyplo::FilePollScheduler scheduler;
-		dyplo::File output_file(ctrl.openFifo(0, O_WRONLY));
-		dyplo::File input_file(ctrl.openFifo(0, O_RDONLY));
+		dyplo::File output_file(context.openFifo(0, O_WRONLY));
+		dyplo::File input_file(context.openFifo(0, O_RDONLY));
 		dyplo::FileOutputQueue<int> output(scheduler, output_file, 2048);
 		dyplo::FileInputQueue<int> input(scheduler, input_file, 2048);
 		dyplo::Thread sender;
