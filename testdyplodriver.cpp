@@ -286,6 +286,7 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 		File fifo_in(openFifo(0, O_RDONLY));
 		File fifo_out(openFifo(0, O_WRONLY));
 		int data[16];
+		for (int i = 0 ; i < 16; ++i) data[i] = 0x11 << i;
 		fifo_out.write(data, sizeof(data));
 		// Check data availabe
 		CHECK(fifo_in.poll_for_incoming_data(1) );
@@ -293,20 +294,39 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 		cfg_cpu.resetWriteFifos(0x1);
 		// Data is gone now
 		CHECK(! fifo_in.poll_for_incoming_data(0) );
+		data[0] = 0x12345678;
+		// Flush any orphans
+		fifo_out.write(data, sizeof(int));
+		do
+		{
+			CHECK(fifo_in.poll_for_incoming_data(1));
+			fifo_in.read(data, sizeof(int));
+		}
+		while (data[0] != 0x12345678);
 	}
 
 	{
-		ctrl.routeAddSingle(0,1,0,2);
+		ctrl.routeAddSingle(0,2,0,1);
 		dyplo::HardwareFifo fifo_in(openFifo(1, O_RDONLY));
 		dyplo::HardwareFifo fifo_out(openFifo(2, O_WRONLY));
 		int data[16];
+		for (int i = 0 ; i < 16; ++i) data[i] = 0x101 << i;
 		fifo_out.write(data, sizeof(data));
 		// Check data availabe
-		CHECK(fifo_in.poll_for_incoming_data(1) );
+		CHECK(fifo_in.poll_for_incoming_data(1));
 		fifo_out.reset();
 		fifo_in.reset();
 		// Data is gone now
 		CHECK(! fifo_in.poll_for_incoming_data(0) );
+		// Flush any orphans
+		data[0] = 0x12345678;
+		fifo_out.write(data, sizeof(int));
+		do
+		{
+			CHECK(fifo_in.poll_for_incoming_data(1));
+			fifo_in.read(data, sizeof(int));
+		}
+		while (data[0] != 0x12345678);
 	}
 
 	ctrl.routeDeleteAll();
