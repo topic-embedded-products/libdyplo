@@ -155,25 +155,33 @@ TEST(Stress, a_to_cpu)
 		control.routeDelete(node->id);
 		int to_cpu_id;
 		node->reset();
-		dyplo::File to_cpu(openAvailableFifo(&to_cpu_id, O_RDONLY));
+		dyplo::HardwareFifo to_cpu(openAvailableFifo(&to_cpu_id, O_RDONLY));
+		to_cpu.reset(); /* Clear FIFO */
 		control.routeAddSingle(node->id, 0, 0, to_cpu_id);
+		CHECK(! to_cpu.poll_for_incoming_data(0) );
 		node->reset_lane(0);
-		node->set_lane_params(0, StressNodeLane(1, 1024*1024, 1));
+		node->set_lane_params(0, StressNodeLane(0));
 		node->enable(1);
 		node->start(1);
 		unsigned int data[256];
-		EQUAL((ssize_t)sizeof(data), to_cpu.read(data, sizeof(data)));
-		node->enable(0);
-		for (unsigned int i = 0; i < (sizeof(data)/sizeof(data[0])); ++i)
+		unsigned int value = 0;
+		for (unsigned int repeat = 4096; repeat != 0; --repeat)
 		{
-			if (data[i] != i)
+			EQUAL((ssize_t)sizeof(data), to_cpu.read(data, sizeof(data)));
+			for (unsigned int i = 0; i < (sizeof(data)/sizeof(data[0])); ++i)
 			{
-				std::ostringstream msg;
-				msg << "Node " << (it - nodes.begin())
-					<< " i=" << i << " data=" << data[i] << " " << data[i+1]; 
-				FAIL(msg.str());
+				if (data[i] != value)
+				{
+					std::ostringstream msg;
+					msg << "Node " << (it - nodes.begin())
+						<< " expected=" << value << " data=" << data[i] << " " << data[i+1]; 
+					FAIL(msg.str());
+				}
+				++value;
 			}
 		}
+		node->enable(0);
+		to_cpu.reset(); /* Clear FIFO for future tests */
 	}
 }
 
@@ -189,13 +197,21 @@ TEST(Stress, a_from_cpu)
 		dyplo::File from_cpu(openAvailableFifo(&from_cpu_id, O_WRONLY));
 		control.routeAddSingle(0, from_cpu_id, node->id, 0);
 		node->reset_lane(0);
-		node->set_lane_params(0, StressNodeLane(1, 1024*1024, 1));
+		node->set_lane_params(0, StressNodeLane(0));
 		node->enable(1);
 		node->start(1);
 		unsigned int data[256];
-		for (unsigned int i = 0; i < (sizeof(data)/sizeof(data[0])); ++i)
-			data[i] = i;
-		EQUAL((ssize_t)sizeof(data), from_cpu.write(data, sizeof(data)));
+		unsigned int value = 0;
+		for (unsigned int repeat = 4096; repeat != 0; --repeat)
+		{
+			for (unsigned int i = 0; i < (sizeof(data)/sizeof(data[0])); ++i)
+			{
+				data[i] = value;
+				++value;
+			}
+			EQUAL((ssize_t)sizeof(data), from_cpu.write(data, sizeof(data)));
+			EQUAL(0u, node->error());
+		}
 		node->enable(0);
 		EQUAL(0u, node->error());
 	}
@@ -207,11 +223,12 @@ TEST(Stress, b_loop_to_self_single)
 	for (StressNodeList::iterator it = nodes.begin();	it != nodes.end(); ++it)
 	{
 		StressNode* node = *it;
+		unsigned int seed = it - nodes.begin();
 		node->reset();
 		EQUAL(0u, node->error()); /* Reset must clear error flag */
 		control.routeDelete(node->id);
 		node->reset_lane(0);
-		node->set_lane_params(0, StressNodeLane(3, 2, 1));
+		node->set_lane_params(0, StressNodeLane(1 + (2*seed), 1 + (3*seed), 1));
 		control.routeAddSingle(node->id, 0, node->id, 0);
 		node->enable();
 		node->start(1);

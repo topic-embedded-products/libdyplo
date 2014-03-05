@@ -279,19 +279,36 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 {
 	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl ctrl(ctx);
-	dyplo::HardwareConfig cfg_cpu(ctx, 0); /* open CPU node */
-	ctrl.routeAddSingle(0,0,0,0);
 	
-	File fifo_in(openFifo(0, O_RDONLY));
-	File fifo_out(openFifo(0, O_WRONLY));
-	int data[16];
-	fifo_out.write(data, sizeof(data));
-	// Check data availabe
-	CHECK(fifo_in.poll_for_incoming_data(1) );
-	cfg_cpu.resetReadFifos(0x1);
-	cfg_cpu.resetWriteFifos(0x1);
-	// Data is gone now
-	CHECK(! fifo_in.poll_for_incoming_data(0) );
+	{
+		dyplo::HardwareConfig cfg_cpu(ctx, 0); /* open CPU node */
+		ctrl.routeAddSingle(0,0,0,0);
+		File fifo_in(openFifo(0, O_RDONLY));
+		File fifo_out(openFifo(0, O_WRONLY));
+		int data[16];
+		fifo_out.write(data, sizeof(data));
+		// Check data availabe
+		CHECK(fifo_in.poll_for_incoming_data(1) );
+		cfg_cpu.resetReadFifos(0x1);
+		cfg_cpu.resetWriteFifos(0x1);
+		// Data is gone now
+		CHECK(! fifo_in.poll_for_incoming_data(0) );
+	}
+
+	{
+		ctrl.routeAddSingle(0,1,0,2);
+		dyplo::HardwareFifo fifo_in(openFifo(1, O_RDONLY));
+		dyplo::HardwareFifo fifo_out(openFifo(2, O_WRONLY));
+		int data[16];
+		fifo_out.write(data, sizeof(data));
+		// Check data availabe
+		CHECK(fifo_in.poll_for_incoming_data(1) );
+		fifo_out.reset();
+		fifo_in.reset();
+		// Data is gone now
+		CHECK(! fifo_in.poll_for_incoming_data(0) );
+	}
+
 	ctrl.routeDeleteAll();
 }
 

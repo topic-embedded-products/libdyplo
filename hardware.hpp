@@ -104,4 +104,11 @@ namespace dyplo
 		void enableNode();
 		void disableNode();
 	};
+
+	class HardwareFifo: public File
+	{
+	public:
+		HardwareFifo(int file_descriptor): File(file_descriptor) {}
+		void reset(); /* Reset fifo */
+	};
 }

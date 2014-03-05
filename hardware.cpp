@@ -430,4 +430,11 @@ namespace dyplo
 		if (result < 0)
 			throw IOException(__func__);
 	}
+	
+	void HardwareFifo::reset()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_WRITE);
+		if (result < 0)
+			throw IOException(__func__);
+	}
 }
