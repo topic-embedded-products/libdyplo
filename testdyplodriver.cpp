@@ -47,7 +47,7 @@
 using dyplo::File;
 
 static int openFifo(int fifo, int access)
-{		
+{
 	std::ostringstream name;
 	if (access == O_RDONLY)
 		name << "/dev/dyplor";
@@ -74,7 +74,7 @@ static void hardware_driver_clean_all_routes()
 	}
 }
 
-struct hardware_driver 
+struct hardware_driver
 {
 };
 
@@ -83,7 +83,9 @@ struct hardware_driver_hdl
 	dyplo::HardwareContext context;
 	hardware_driver_hdl()
 	{
+		dyplo::HardwareControl ctrl(context);
 		context.setProgramMode(true); /* partial */
+		ctrl.disableNodes(0x1E); /* Prevent traffic from nodes 1..4 */
 		for (int id = 1; id <= 4; ++id)
 		{
 			std::string filename =
@@ -92,6 +94,7 @@ struct hardware_driver_hdl
 				std::cerr << "No 'adder' logic found for node " << id;
 			context.program(filename.c_str());
 		}
+		ctrl.enableNodes(0x1E);
 	}
 	~hardware_driver_hdl()
 	{
@@ -243,7 +246,7 @@ TEST(hardware_driver, d_io_control_backplane)
 {
 	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl ctrl(ctx);
-	
+
 	ctrl.enableNode(0);
 	CHECK(ctrl.isNodeEnabled(0));
 	ctrl.disableNode(1);
@@ -257,7 +260,7 @@ TEST(hardware_driver, d_io_control_backplane)
 	CHECK(ctrl.isNodeEnabled(0));
 	ctrl.enableNode(2);
 	CHECK(ctrl.isNodeEnabled(2));
-	
+
 	dyplo::HardwareConfig cfg1(ctx, 1);
 	CHECK(cfg1.isNodeEnabled());
 	dyplo::HardwareConfig cfg2(ctx, 2);
@@ -279,7 +282,7 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 {
 	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl ctrl(ctx);
-	
+
 	{
 		dyplo::HardwareConfig cfg_cpu(ctx, 0); /* open CPU node */
 		ctrl.routeAddSingle(0,0,0,0);
@@ -377,14 +380,14 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0, int timeout_us 
 	int max_repeats = 256;
 	int* buffer = new int[blocksize];
 	ssize_t total_written = 0;
-	
+
 	while (--max_repeats)
 	{
 		for (int i = 0; i < blocksize; ++i)
 			buffer[i] = ((total_written >> 2) + i) + signature;
 		ssize_t written = fifo_out.write(buffer, blocksize*sizeof(buffer[0]));
 		total_written += written;
-		
+
 		if (written < (ssize_t)(blocksize*sizeof(buffer[0])))
 		{
 			struct timeval timeout;
@@ -395,7 +398,7 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0, int timeout_us 
 		}
 	}
 	delete [] buffer;
-	
+
 	if (max_repeats <= 0)
 	{
 		std::ostringstream msg;
@@ -403,7 +406,7 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0, int timeout_us 
 		FAIL(msg.str());
 	}
 	CHECK(max_repeats > 0);
-	
+
 	return total_written;
 }
 
@@ -413,26 +416,26 @@ void hardware_driver_poll_single(int fifo)
 	File fifo_out(openFifo(fifo, O_WRONLY));
 	const int signature = 10000000 * (fifo+1);
 	int data = 42;
-	
+
 	/* Nothing to read yet */
 	CHECK(! fifo_in.poll_for_incoming_data(0) );
-	
+
 	fifo_out.write(&data, sizeof(data));
 
 	/* Eternity takes 5 seconds on our system */
 	CHECK(fifo_in.poll_for_incoming_data(5) );
-	
+
 	fifo_in.read(&data, sizeof(data));
 
 	CHECK(! fifo_in.poll_for_incoming_data(0) ); /* is empty */
-	
+
 	EQUAL(0, dyplo::set_non_blocking(fifo_in.handle));
 	/* Read from empty fifo, must not block but return EAGAIN error */
 	ASSERT_THROW(fifo_in.read(&data, sizeof(data)), dyplo::IOException);
 
 	/* write queue must report to be ready (nothing in there, plenty room) */
 	CHECK(fifo_out.poll_for_outgoing_data(0));
-	
+
 	/* Set output fifo in non-blocking mode */
 	EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 
@@ -478,7 +481,7 @@ void hardware_driver_poll_single(int fifo)
 	CHECK(fifo_out.poll_for_outgoing_data(0)); /* Has room */
 
 	ASSERT_THROW(fifo_in.read(&data, sizeof(data)), dyplo::IOException);
-	
+
 }
 
 TEST(hardware_driver, f_poll)
@@ -505,21 +508,21 @@ struct FileContext
 	dyplo::Condition started;
 	dyplo::Mutex mutex;
 	bool is_started;
-	
+
 	void set()
 	{
 		dyplo::ScopedLock<dyplo::Mutex> lock(mutex);
 		is_started = true;
 		started.signal();
 	}
-	
+
 	void wait()
 	{
 		dyplo::ScopedLock<dyplo::Mutex> lock(mutex);
 		while (!is_started)
 			started.wait(mutex);
 	}
-	
+
 	FileContext(File* f):
 		file(f),
 		is_started(false)
@@ -548,7 +551,7 @@ void check_all_input_fifos_are_empty()
 	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
 	{
 		File fifo_in(openFifo(fifo, O_RDONLY));
-		
+
 		if (fifo_in.poll_for_incoming_data(0))
 		{
 			msg << "Input fifo " << fifo << " is not empty:";
@@ -576,7 +579,7 @@ void check_all_input_fifos_are_empty()
 static void hardware_driver_irq_driven_read_single(int fifo)
 {
 	dyplo::Thread reader;
-	
+
 	File fifo_in(openFifo(fifo, O_RDONLY));
 	File fifo_out(openFifo(fifo, O_WRONLY));
 	FileContext ctx(&fifo_in);
@@ -636,7 +639,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	File fifo_out(openFifo(fifo, O_WRONLY));
 	FileContext ctx(&fifo_out);
 	dyplo::Thread writer;
-	
+
 	writer.start(thread_write_data, &ctx);
 	ctx.wait(); /* Block until we're calling "write" on the other thread*/
 	ssize_t total_read = 0;
@@ -683,7 +686,7 @@ TEST(hardware_driver, i_cpu_block_crossbar)
 {
 	/* Set up weird routing */
 	static dyplo::HardwareControl::Route routes[] = {
-		{0, 0, 5, 0}, 
+		{0, 0, 5, 0},
 		{4, 0, 8, 0},
 		{1, 0, DYPLO_CPU_FIFO_COUNT-1, 0},
 		{DYPLO_CPU_FIFO_COUNT-1,0, 4, 0},
@@ -719,7 +722,7 @@ TEST(hardware_driver_hdl, j_hdl_block_processing)
 		1, 10001, -1000, 100
 	};
 	static dyplo::HardwareControl::Route routes[] = {
-		{0, 1, 0, 0}, 
+		{0, 1, 0, 0},
 		{0, 0, 0, 1}, /* Fifo 0 to HDL #1 port 0 */
 		{1, 2, 1, 0},
 		{1, 0, 1, 2}, /* HDL #2 connected to fifo 1 */
@@ -997,7 +1000,7 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 					if (data[i] != counter)
 					{
 						std::ostringstream msg; \
-						msg << "Mismatch at " << i << "(+" << words_read << ") expected: " 
+						msg << "Mismatch at " << i << "(+" << words_read << ") expected: "
 							<< (counter) << " actual: " << data[i]
 							<< " diff:" << (data[i] - counter);
 						if (i < count - 2)
