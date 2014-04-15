@@ -84,6 +84,7 @@ namespace dyplo
 		unsigned int getEnabledNodes();
 		void enableNodes(unsigned int mask);
 		void disableNodes(unsigned int mask);
+		void writeDyploLicenseFile(const char* path_to_dyplo_license_file);
 		
 		bool isNodeEnabled(int node) { return (getEnabledNodes() & (1<<node)) != 0; }
 		void enableNode(int node) { enableNodes(1<<node); }

@@ -35,6 +35,7 @@
 #include <vector>
 #include <errno.h>
 #include <string.h>
+#include <fstream>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 #define XILINX_IS_PARTIAL_BITSTREAM_FILE "/sys/class/xdevcfg/xdevcfg/device/is_partial_bitstream"
@@ -379,6 +380,30 @@ namespace dyplo
 		int result = ::ioctl(handle, DYPLO_IOCTBACKPLANE_DISABLE, mask);
 		if (result < 0)
 			throw IOException(__func__);
+	}
+
+	void HardwareControl::writeDyploLicenseFile(const char* path_to_dyplo_license_file)
+	{
+		unsigned long long hash;
+		unsigned int lsb, msb;
+		std::string line;
+		std::ifstream license_file(path_to_dyplo_license_file);
+		if (license_file.is_open())
+		{
+			while ( getline (license_file,line) )
+			{
+				std::istringstream iss(line.c_str());
+				iss >> std::hex >> hash;
+			}
+			license_file.close();
+		}
+
+		lsb = hash & 0xFFFFFFFF;
+		msb = hash >> 32;
+
+		seek(0x60);
+		write(&lsb, 4);
+		write(&msb, 4);
 	}
 	
 	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)
