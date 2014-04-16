@@ -385,25 +385,26 @@ namespace dyplo
 	void HardwareControl::writeDyploLicenseFile(const char* path_to_dyplo_license_file)
 	{
 		unsigned long long hash;
-		unsigned int lsb, msb;
 		std::string line;
 		std::ifstream license_file(path_to_dyplo_license_file);
+
 		if (license_file.is_open())
 		{
 			while ( getline (license_file,line) )
 			{
-				std::istringstream iss(line.c_str());
-				iss >> std::hex >> hash;
+				if (line.find("DYPLO_DNA") != -1 ) 
+				{
+					int equal_pos = line.find("=");
+					std::string value = line.substr(equal_pos + 1);
+					std::istringstream iss(value.c_str());
+					iss >> std::hex >> hash;			
+				}
 			}
 			license_file.close();
 		}
 
-		lsb = hash & 0xFFFFFFFF;
-		msb = hash >> 32;
-
 		seek(0x60);
-		write(&lsb, 4);
-		write(&msb, 4);
+		write(&hash, sizeof(hash));
 	}
 	
 	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)
