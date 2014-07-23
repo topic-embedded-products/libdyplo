@@ -98,18 +98,18 @@ namespace dyplo
 	{
 		return "Unexpected end of file";
 	}
-	
+
 	HardwareContext::HardwareContext():
 		prefix(DYPLO_DRIVER_PREFIX),
 		bitstream_basepath(BITSTREAM_DATA_PATH)
 	{}
-	
+
 	HardwareContext::HardwareContext(const std::string& driver_prefix):
 		prefix(driver_prefix),
 		bitstream_basepath(BITSTREAM_DATA_PATH)
 	{
 	}
-	
+
 	int HardwareContext::openFifo(int fifo, int access)
 	{
 		std::ostringstream name;
@@ -123,7 +123,7 @@ namespace dyplo
 		name << fifo;
 		return ::open(name.str().c_str(), access);
 	}
-	
+
 	int HardwareContext::openConfig(int index, int access)
 	{
 		std::ostringstream name;
@@ -145,7 +145,7 @@ namespace dyplo
 		if (fd.write(&value, sizeof(value)) != sizeof(value))
 			throw TruncatedFileException();
 	}
-	
+
 	bool HardwareContext::getProgramMode()
 	{
 		File fd(XILINX_IS_PARTIAL_BITSTREAM_FILE, O_RDONLY);
@@ -237,13 +237,13 @@ namespace dyplo
 			return total_written;
 		}
 	}
-	
+
 	unsigned int HardwareContext::program(const char* filename)
 	{
 		File output(XILINX_XDEVCFG, O_WRONLY);
 		return program(output, filename);
 	}
-	
+
 	static bool is_digit(const char c)
 	{
 		return (c >= '0') && (c <= '9');
@@ -275,7 +275,7 @@ namespace dyplo
 		}
 		return -1;
 	}
-	
+
 	unsigned int HardwareContext::getAvailablePartitions(const char* function)
 	{
 		unsigned int result = 0;
@@ -299,7 +299,7 @@ namespace dyplo
 		}
 		return result;
 	}
-	
+
 	std::string HardwareContext::findPartition(const char* function, int partition)
 	{
 		std::string path(bitstream_basepath);
@@ -352,14 +352,14 @@ namespace dyplo
 		if (::ioctl(handle, DYPLO_IOCSROUTE, &routes) != 0)
 			throw IOException(__func__);
 	}
-	
+
 	void HardwareControl::routeDelete(char node)
 	{
 		int arg = node;
 		if (::ioctl(handle, DYPLO_IOCTROUTE_DELETE, arg) != 0)
 			throw IOException(__func__);
 	}
-	
+
 	unsigned int HardwareControl::getEnabledNodes()
 	{
 		int result = ::ioctl(handle, DYPLO_IOCQBACKPLANE_STATUS);
@@ -382,6 +382,12 @@ namespace dyplo
 			throw IOException(__func__);
 	}
 
+	void HardwareControl::writeDyploLicense(unsigned long long license_blob)
+	{
+		seek(0x60);
+		write(&license_blob, sizeof(license_blob));
+	}
+
 	void HardwareControl::writeDyploLicenseFile(const char* path_to_dyplo_license_file)
 	{
 		unsigned long long hash;
@@ -392,21 +398,19 @@ namespace dyplo
 		{
 			while ( getline (license_file,line) )
 			{
-				if (line.find("DYPLO_DNA") != -1 ) 
+				if (line.find("DYPLO_DNA") != -1 )
 				{
 					int equal_pos = line.find("=");
 					std::string value = line.substr(equal_pos + 1);
 					std::istringstream iss(value.c_str());
-					iss >> std::hex >> hash;			
+					iss >> std::hex >> hash;
 				}
 			}
 			license_file.close();
 		}
-
-		seek(0x60);
-		write(&hash, sizeof(hash));
+		writeDyploLicense(hash);
 	}
-	
+
 	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)
 	{
 		int result = ::ioctl(file_descriptor, DYPLO_IOCRESET_FIFO_WRITE, mask);
@@ -456,7 +460,7 @@ namespace dyplo
 		if (result < 0)
 			throw IOException(__func__);
 	}
-	
+
 	void HardwareFifo::reset()
 	{
 		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_WRITE);

@@ -44,13 +44,13 @@ namespace dyplo
 		int openConfig(int index, int access);
 		/* Use HardwareControl as more convenient access */
 		int openControl(int access);
-		
+
 		/* Program device using a partial bitstream */
 		static void setProgramMode(bool is_partial_bitstream);
 		static bool getProgramMode();
 		static unsigned int program(File &output, const char* filename);
 		static unsigned int program(const char* filename);
-		
+
 		/* Find bitfiles in directories */
 		unsigned int getAvailablePartitions(const char* function);
 		std::string findPartition(const char* function, int partition);
@@ -60,7 +60,7 @@ namespace dyplo
 		std::string prefix;
 		std::string bitstream_basepath;
 	};
-	
+
 	class HardwareControl: public File
 	{
 	public:
@@ -80,17 +80,18 @@ namespace dyplo
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
 		void routeDelete(char node);
-		
+
 		unsigned int getEnabledNodes();
 		void enableNodes(unsigned int mask);
 		void disableNodes(unsigned int mask);
+		void writeDyploLicense(unsigned long long license_blob);
 		void writeDyploLicenseFile(const char* path_to_dyplo_license_file);
-		
+
 		bool isNodeEnabled(int node) { return (getEnabledNodes() & (1<<node)) != 0; }
 		void enableNode(int node) { enableNodes(1<<node); }
 		void disableNode(int node) { disableNodes(1<<node); }
 	};
-	
+
 	class HardwareConfig: public File
 	{
 	public:
