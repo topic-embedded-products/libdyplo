@@ -51,12 +51,17 @@ namespace dyplo
 			if (handle == -1)
 				throw dyplo::IOException();
 		}
+		/* Copy constructor, duplicates the file handle. This allows
+		 * the object to be used in a vector for example. Be careful,
+		 * all the "dup" rules apply. This is the same as calling
+		 * File(::dup(other)) */
+		File(const File& other);
 
 		~File()
 		{
 			::close(handle);
 		}
-		
+
 		operator int() const { return handle; }
 
 		ssize_t write(const void *buf, size_t count)
@@ -74,7 +79,7 @@ namespace dyplo
 				throw dyplo::IOException();
 			return result;
 		}
-		
+
 		off_t seek(off_t offset, int whence = SEEK_SET)
 		{
 			off_t result = ::lseek(handle, offset, whence);
@@ -82,14 +87,12 @@ namespace dyplo
 				throw dyplo::IOException();
 			return result;
 		}
-		
+
 		bool poll_for_incoming_data(int timeout_in_seconds);
 		bool poll_for_outgoing_data(int timeout_in_seconds);
 		bool poll_for_incoming_data(struct timeval *timeout);
 		bool poll_for_outgoing_data(struct timeval *timeout);
-		
+
 		static off_t get_size(const char* path);
-	private:
-		File(const File& other); /* Prevent copy constructor */
 	};
 }

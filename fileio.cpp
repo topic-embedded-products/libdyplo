@@ -38,6 +38,13 @@ namespace dyplo
 			throw dyplo::IOException(filename);
 	}
 
+	File::File(const File& other):
+		handle(::dup(other.handle))
+	{
+		if (handle == -1)
+			throw dyplo::IOException();
+	}
+
 	bool File::poll_for_incoming_data(struct timeval *timeout)
 	{
 		fd_set fds;
