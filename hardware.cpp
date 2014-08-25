@@ -276,13 +276,10 @@ namespace dyplo
 		return -1;
 	}
 
-	unsigned int HardwareContext::getAvailablePartitions(const char* function)
+	unsigned int HardwareContext::getAvailablePartitionsIn(const char* path)
 	{
-		unsigned int result = 0;
-		std::string path(bitstream_basepath);
-		path += '/';
-		path += function;
-		DirectoryListing dir(path.c_str());
+		int result = 0;
+		DirectoryListing dir(path);
 		struct dirent *entry;
 		while ((entry = dir.next()) != NULL)
 		{
@@ -300,12 +297,17 @@ namespace dyplo
 		return result;
 	}
 
-	std::string HardwareContext::findPartition(const char* function, int partition)
+	unsigned int HardwareContext::getAvailablePartitions(const char* function)
 	{
 		std::string path(bitstream_basepath);
 		path += '/';
 		path += function;
-		DirectoryListing dir(path.c_str());
+		return getAvailablePartitionsIn(path.c_str());
+	}
+
+	std::string HardwareContext::findPartitionIn(const char* path, int partition)
+	{
+		DirectoryListing dir(path);
 		struct dirent *entry;
 		while ((entry = dir.next()) != NULL)
 		{
@@ -316,10 +318,18 @@ namespace dyplo
 				case DT_UNKNOWN:
 					int index = parse_number_from_name(entry->d_name);
 					if (index == partition)
-						return path + '/' + entry->d_name;
+						return std::string(path) + '/' + entry->d_name;
 			}
 		}
 		return "";
+	}
+
+	std::string HardwareContext::findPartition(const char* function, int partition)
+	{
+		std::string path(bitstream_basepath);
+		path += '/';
+		path += function;
+		return findPartitionIn(path.c_str(), partition);
 	}
 
 	void HardwareControl::routeDeleteAll()

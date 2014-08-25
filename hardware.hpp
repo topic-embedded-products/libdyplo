@@ -54,6 +54,8 @@ namespace dyplo
 		/* Find bitfiles in directories */
 		unsigned int getAvailablePartitions(const char* function);
 		std::string findPartition(const char* function, int partition);
+		static unsigned int getAvailablePartitionsIn(const char* path);
+		static std::string findPartitionIn(const char* path, int partition);
 		void setBitstreamBasepath(const std::string& value) { bitstream_basepath = value; }
 		void setBitstreamBasepath(const char* value) { bitstream_basepath = value; }
 	protected:
