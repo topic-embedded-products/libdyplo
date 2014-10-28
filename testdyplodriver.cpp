@@ -39,7 +39,7 @@
 #include "yaffut.h"
 
 /* In future, retrieve number of fifo's and nodes from driver. */
-#define DYPLO_CPU_FIFO_COUNT	12
+#define DYPLO_CPU_FIFO_COUNT	8
 
 /* Define "eternity" as a 5 second wait */
 #define VERY_LONG_TIMEOUT_US	5000000
@@ -687,7 +687,7 @@ TEST(hardware_driver, i_cpu_block_crossbar)
 	/* Set up weird routing */
 	static dyplo::HardwareControl::Route routes[] = {
 		{0, 0, 5, 0},
-		{4, 0, 8, 0},
+		{4, 0, 6, 0},
 		{1, 0, DYPLO_CPU_FIFO_COUNT-1, 0},
 		{DYPLO_CPU_FIFO_COUNT-1,0, 4, 0},
 	};
