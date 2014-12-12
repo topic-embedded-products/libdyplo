@@ -28,6 +28,8 @@
  */
 #include <unistd.h>
 #include <errno.h>
+#include <vector>
+#include <stdio.h>
 #include "fileio.hpp"
 #include "filequeue.hpp"
 #include "thread.hpp"
@@ -38,13 +40,45 @@
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
-/* In future, retrieve number of fifo's and nodes from driver. */
-#define DYPLO_CPU_FIFO_COUNT	8
-
 /* Define "eternity" as a 5 second wait */
 #define VERY_LONG_TIMEOUT_US	5000000
 
 using dyplo::File;
+
+static int dyplo_cpu_fifo_count_r = -1;
+static int dyplo_cpu_fifo_count_w = -1;
+
+static int count_numbered_files(const char* pattern)
+{
+	int result = 0;
+	char filename[64];
+	for (;;)
+	{
+		sprintf(filename, pattern, result);
+		if (::access(filename, F_OK) != 0)
+			return result;
+		++result;
+	}
+}
+
+static int get_dyplo_cpu_fifo_count_r()
+{
+	if (dyplo_cpu_fifo_count_r < 0)
+		dyplo_cpu_fifo_count_r = count_numbered_files("/dev/dyplor%d");
+	return dyplo_cpu_fifo_count_r;
+}
+
+static int get_dyplo_cpu_fifo_count_w()
+{
+	if (dyplo_cpu_fifo_count_w < 0)
+		dyplo_cpu_fifo_count_w = count_numbered_files("/dev/dyplow%d");
+	return dyplo_cpu_fifo_count_w;
+}
+
+static int get_dyplo_cpu_fifo_count()
+{
+	return std::min(get_dyplo_cpu_fifo_count_w(), get_dyplo_cpu_fifo_count_r());
+}
 
 static int openFifo(int fifo, int access)
 {
@@ -81,20 +115,27 @@ struct hardware_driver
 struct hardware_driver_hdl
 {
 	dyplo::HardwareContext context;
+	std::vector<int> adders;
 	hardware_driver_hdl()
 	{
 		dyplo::HardwareControl ctrl(context);
 		context.setProgramMode(true); /* partial */
-		ctrl.disableNodes(0x1E); /* Prevent traffic from nodes 1..4 */
-		for (int id = 1; id <= 4; ++id)
+		for (int id = 1; id < 32; ++id)
 		{
 			std::string filename =
 				context.findPartition("adder", id);
-			if (filename.empty())
-				std::cerr << "No 'adder' logic found for node " << id;
-			context.program(filename.c_str());
+			if (!filename.empty())
+			{
+				ctrl.disableNode(id);
+				context.program(filename.c_str());
+				ctrl.enableNode(id);
+				adders.push_back(id);
+				if (adders.size() >= 2)
+					break; /* Two is enough */
+			}
 		}
-		ctrl.enableNodes(0x1E);
+		/* Need at least 2 adders for these tests */
+		CHECK(adders.size() >= 2);
 	}
 	~hardware_driver_hdl()
 	{
@@ -145,24 +186,25 @@ TEST(hardware_driver, c_fifo_single_open_rw_access)
 	ASSERT_THROW(File w0r("/dev/dyplow0", O_RDONLY), dyplo::IOException);
 }
 
-static void connect_all_fifos_in_loop()
+static int connect_all_fifos_in_loop()
 {
+	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
 	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl::Route routes[DYPLO_CPU_FIFO_COUNT];
-	for (int i = 0; i < DYPLO_CPU_FIFO_COUNT; ++i) {
+	dyplo::HardwareControl::Route routes[dyplo_cpu_fifo_count];
+	for (int i = 0; i < dyplo_cpu_fifo_count; ++i) {
 		routes[i].srcNode = 0;
 		routes[i].srcFifo = i;
 		routes[i].dstNode = 0;
 		routes[i].dstFifo = i;
 	}
-	dyplo::HardwareControl(ctrl).routeAdd(routes, DYPLO_CPU_FIFO_COUNT);
+	dyplo::HardwareControl(ctrl).routeAdd(routes, dyplo_cpu_fifo_count);
+	return dyplo_cpu_fifo_count;
 }
 
 TEST(hardware_driver_hdl, d_io_control_route)
 {
-	dyplo::HardwareContext ctx;
 	dyplo::HardwareControl::Route routes[64];
-	dyplo::HardwareControl ctrl(ctx);
+	dyplo::HardwareControl ctrl(context);
 	/* Clean all routes */
 	ctrl.routeDeleteAll();
 	int n_routes =
@@ -194,46 +236,64 @@ TEST(hardware_driver_hdl, d_io_control_route)
 	EQUAL(0, (int)routes[1].dstNode);
 	EQUAL(2, (int)routes[1].dstFifo);
 	ctrl.routeAddSingle(0,1,0,1);
-	/* Start over */
+	/* Test routes to and from the adder nodes. The adders have 4 inputs
+	 * and 4 outputs each. */
+	const int ADDER1 = adders[0];
+	const int ADDER2 = adders[1];
 	ctrl.routeDeleteAll();
-	ctrl.routeAddSingle(2,1,0,4);
+	ctrl.routeAddSingle(ADDER2,1,0,4);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(1, n_routes);
-	EQUAL(2, (int)routes[0].srcNode);
+	EQUAL(ADDER2, (int)routes[0].srcNode);
 	EQUAL(1, (int)routes[0].srcFifo);
 	EQUAL(0, (int)routes[0].dstNode);
 	EQUAL(4, (int)routes[0].dstFifo);
-	ctrl.routeAddSingle(2,0,1,3);
-	ctrl.routeAddSingle(1,0,0,5);
-	ctrl.routeAddSingle(1,1,2,2);
+	ctrl.routeAddSingle(ADDER2,0,ADDER1,3);
+	ctrl.routeAddSingle(ADDER1,0,0,5);
+	ctrl.routeAddSingle(ADDER1,1,ADDER2,2);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(4, n_routes);
 	/* Remove node */
-	ctrl.routeDelete(2);
+	ctrl.routeDelete(ADDER2);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(1, n_routes); /* Only 1,0,0,5 must remain */
-	EQUAL(1, (int)routes[0].srcNode);
+	EQUAL(1, n_routes); /* Only ADDER1,0,0,5 must remain */
+	EQUAL(ADDER1, (int)routes[0].srcNode);
 	EQUAL(0, (int)routes[0].srcFifo);
 	EQUAL(0, (int)routes[0].dstNode);
 	EQUAL(5, (int)routes[0].dstFifo);
-	ctrl.routeAddSingle(2,0,1,0);
-	ctrl.routeAddSingle(0,0,1,1);
-	ctrl.routeAddSingle(0,1,2,1);
-	ctrl.routeAddSingle(2,1,0,1);
-	ctrl.routeAddSingle(1,1,2,0);
-	ctrl.routeDelete(1);
+	ctrl.routeAddSingle(ADDER2,0,1,0);
+	ctrl.routeAddSingle(0,0,ADDER1,1);
+	ctrl.routeAddSingle(0,1,ADDER2,1);
+	ctrl.routeAddSingle(ADDER2,1,0,1);
+	ctrl.routeAddSingle(ADDER1,1,ADDER2,0);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(2, n_routes); /* Only 2,1,0,1 and 0,1,2,1 must remain */
+	EQUAL(6, n_routes);
+	ctrl.routeDelete(ADDER1);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	for (int i = 0; i < n_routes; ++i)
+	{
+		/* ADDER1 may not occur in either source or destination */
+		CHECK(routes[i].dstNode != ADDER1);
+		CHECK(routes[i].srcNode != ADDER1);
+	}
+	EQUAL(3, n_routes); /* Only ADDER2 routes must remain */
+	ctrl.routeDelete(ADDER2);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(0, n_routes);
 	/* Setup loopback system (1->0, 1->1 etc) */
-	connect_all_fifos_in_loop();
+	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	std::cout << " (" << dyplo_cpu_fifo_count << ")";
+	CHECK(dyplo_cpu_fifo_count > 0);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(DYPLO_CPU_FIFO_COUNT, n_routes);
-	for (int fifo=0; fifo<DYPLO_CPU_FIFO_COUNT; ++fifo)
+	EQUAL(dyplo_cpu_fifo_count, n_routes);
+	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
 	{
 		EQUAL(0, routes[fifo].srcNode);
 		EQUAL(fifo, routes[fifo].srcFifo);
@@ -338,8 +398,8 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 
 TEST(hardware_driver, e_transmit_loop)
 {
-	connect_all_fifos_in_loop();
-	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
+	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
 	{
 		File fifo_in(openFifo(fifo, O_RDONLY));
 		File fifo_out(openFifo(fifo, O_WRONLY));
@@ -486,8 +546,8 @@ void hardware_driver_poll_single(int fifo)
 
 TEST(hardware_driver, f_poll)
 {
-	connect_all_fifos_in_loop();
-	for (int i = 0; i < DYPLO_CPU_FIFO_COUNT; ++i)
+	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	for (int i = 0; i < dyplo_cpu_fifo_count; ++i)
 	{
 		try
 		{
@@ -548,7 +608,8 @@ void* thread_read_data(void* arg)
 void check_all_input_fifos_are_empty()
 {
 	std::ostringstream msg;
-	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
+	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count_r();
+	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
 	{
 		File fifo_in(openFifo(fifo, O_RDONLY));
 
@@ -594,8 +655,8 @@ static void hardware_driver_irq_driven_read_single(int fifo)
 
 TEST(hardware_driver, g_irq_driven_read)
 {
-	connect_all_fifos_in_loop();
-	for (int fifo = DYPLO_CPU_FIFO_COUNT-1; fifo >= 0; --fifo) /* go back, variation */
+	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	for (int fifo = dyplo_cpu_fifo_count-1; fifo >= 0; --fifo) /* go back, variation */
 		hardware_driver_irq_driven_read_single(fifo);
 	check_all_input_fifos_are_empty();
 }
@@ -676,8 +737,8 @@ void hardware_driver_irq_driven_write_single(int fifo)
 
 TEST(hardware_driver, h_irq_driven_write)
 {
-	connect_all_fifos_in_loop();
-	for (int fifo = 0; fifo < DYPLO_CPU_FIFO_COUNT; ++fifo)
+	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
 		hardware_driver_irq_driven_write_single(fifo);
 	check_all_input_fifos_are_empty();
 }
@@ -685,11 +746,16 @@ TEST(hardware_driver, h_irq_driven_write)
 TEST(hardware_driver, i_cpu_block_crossbar)
 {
 	/* Set up weird routing */
-	static dyplo::HardwareControl::Route routes[] = {
-		{0, 0, 5, 0},
-		{4, 0, 6, 0},
-		{1, 0, DYPLO_CPU_FIFO_COUNT-1, 0},
-		{DYPLO_CPU_FIFO_COUNT-1,0, 4, 0},
+	const int nr_read_fifos = get_dyplo_cpu_fifo_count_r();
+	const int nr_write_fifos = get_dyplo_cpu_fifo_count_w();
+	/* Check that there are enough resources */
+	CHECK(nr_read_fifos >= 4);
+	CHECK(nr_write_fifos >= 4);
+	const dyplo::HardwareControl::Route routes[] = {
+		{0, 0, nr_read_fifos/2, 0},
+		{nr_write_fifos/2, 0, 1, 0},
+		{nr_write_fifos/2 + 1, 0, nr_read_fifos-1, 0},
+		{nr_write_fifos-1, 0, nr_read_fifos/2+1, 0},
 	};
 	dyplo::HardwareContext ctrl;
 	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
@@ -721,11 +787,13 @@ TEST(hardware_driver_hdl, j_hdl_block_processing)
 	static const int hdl_configuration_blob[] = {
 		1, 10001, -1000, 100
 	};
-	static dyplo::HardwareControl::Route routes[] = {
-		{0, 1, 0, 0},
-		{0, 0, 0, 1}, /* Fifo 0 to HDL #1 port 0 */
-		{1, 2, 1, 0},
-		{1, 0, 1, 2}, /* HDL #2 connected to fifo 1 */
+	const int ADDER1 = adders[0];
+	const int ADDER2 = adders[1];
+	const dyplo::HardwareControl::Route routes[] = {
+		{0, ADDER1, 0, 0},
+		{0, 0, 0, ADDER1}, /* Fifo 0 to HDL #1 port 0 */
+		{1, ADDER2, 1, 0},
+		{1, 0, 1, ADDER2}, /* HDL #2 connected to fifo 1 */
 	};
 	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	int data[] = {1, 2, 42000, -42000};
@@ -734,7 +802,7 @@ TEST(hardware_driver_hdl, j_hdl_block_processing)
 	{
 		/* configure HDL block with coefficients */
 		{
-			File hdl_config(context.openConfig(fifo+1, O_WRONLY));
+			File hdl_config(context.openConfig(adders[fifo], O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
@@ -843,25 +911,27 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
-	static dyplo::HardwareControl::Route routes[] = {
-		{0, 1, 6, 0}, /* 0.6 -> 1.0 */
-		{0, 2, 0, 1}, /* 1.0 -> 2.0 */
-		{1, 1, 0, 2}, /* 2.0 -> 1.1 */
-		{1, 2, 1, 1}, /* 1.1 -> 2.1 */
-		{2, 1, 1, 2}, /* 2.1 -> 1.2 */
-		{2, 2, 2, 1}, /* 1.2 -> 2.2 */
-		{3, 1, 2, 2}, /* 2.2 -> 1.3 */
-		{3, 2, 3, 1}, /* 1.3 -> 2.3 */
-		{7, 0, 3, 2}, /* 2.3 -> 0.7 */
+	const int ADDER1 = adders[0];
+	const int ADDER2 = adders[1];
+	const dyplo::HardwareControl::Route routes[] = {
+		{0, ADDER1, 6, 0}, /* 0.6 -> 1.0 */
+		{0, ADDER2, 0, ADDER1}, /* 1.0 -> 2.0 */
+		{1, ADDER1, 0, ADDER2}, /* 2.0 -> 1.1 */
+		{1, ADDER2, 1, ADDER1}, /* 1.1 -> 2.1 */
+		{2, ADDER1, 1, ADDER2}, /* 2.1 -> 1.2 */
+		{2, ADDER2, 2, ADDER1}, /* 1.2 -> 2.2 */
+		{3, ADDER1, 2, ADDER2}, /* 2.2 -> 1.3 */
+		{3, ADDER2, 3, ADDER1}, /* 1.3 -> 2.3 */
+		{7, 0, 3, ADDER2}, /* 2.3 -> 0.7 */
 	};
 	dyplo::HardwareControl(context)
 		.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
-	for (int block = 1; block < 3; ++block)
+	for (int block = 0; block < 2; ++block)
 	{
 		try
 		{
-			File hdl_config(context.openConfig(block, O_WRONLY));
+			File hdl_config(context.openConfig(adders[block], O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
@@ -883,24 +953,26 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
-	static dyplo::HardwareControl::Route routes[] = {
-		{0, 1, 4, 0}, /* 0.4 -> 1.0 */
-		{1, 1, 0, 1}, /* -> 1.1 */
-		{2, 1, 1, 1}, /* -> 1.2 */
-		{3, 1, 2, 1}, /* -> 1.3 */
-		{0, 2, 3, 1}, /* -> 2.0 */
-		{1, 2, 0, 2}, /* -> 2.1 */
-		{2, 2, 1, 2}, /* -> 2.2 */
-		{3, 2, 2, 2}, /* -> 2.3 */
-		{5, 0, 3, 2}, /* 2.3 -> 0.5 */
+	const int ADDER1 = adders[0];
+	const int ADDER2 = adders[1];
+	const dyplo::HardwareControl::Route routes[] = {
+		{0, ADDER1, 4, 0}, /* 0.4 -> 1.0 */
+		{1, ADDER1, 0, ADDER1}, /* -> 1.1 */
+		{2, ADDER1, 1, ADDER1}, /* -> 1.2 */
+		{3, ADDER1, 2, ADDER1}, /* -> 1.3 */
+		{0, ADDER2, 3, ADDER1}, /* -> 2.0 */
+		{1, ADDER2, 0, ADDER2}, /* -> 2.1 */
+		{2, ADDER2, 1, ADDER2}, /* -> 2.2 */
+		{3, ADDER2, 2, ADDER2}, /* -> 2.3 */
+		{5, 0, 3, ADDER2}, /* 2.3 -> 0.5 */
 	};
 	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
-	for (int block = 1; block < 3; ++block)
+	for (int block = 0; block < 2; ++block)
 	{
 		try
 		{
-			File hdl_config(context.openConfig(block, O_WRONLY));
+			File hdl_config(context.openConfig(adders[block], O_WRONLY));
 			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
@@ -949,25 +1021,23 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 	static const int hdl_configuration_blob[] = {
 		0, 0, 0, 0,
 	};
-	/* Set up route: Loop through the HDL blocks four times */
-	static dyplo::HardwareControl::Route routes[] = {
-		{0, 1, 0, 0}, /* 0.0 -> 1.0 */
-		{0, 0, 0, 1}, /* 1.0 -> 0.0 */
+	/* Set up route: Loop through the HDL block */
+	const int ADDER1 = adders[0];
+	const dyplo::HardwareControl::Route routes[] = {
+		{0, ADDER1, 0, 0}, /* 0.0 -> 1.0 */
+		{0, 0, 0, ADDER1}, /* 1.0 -> 0.0 */
 	};
 	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
-	for (int block = 1; block < 3; ++block)
+	try
 	{
-		try
-		{
-			File hdl_config(context.openConfig(block, O_WRONLY));
-			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
-				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
-		}
-		catch (const dyplo::IOException& ex)
-		{
-			FAIL(ex.what());
-		}
+		File hdl_config(context.openConfig(ADDER1, O_WRONLY));
+		EQUAL((ssize_t)sizeof(hdl_configuration_blob),
+			hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+	}
+	catch (const dyplo::IOException& ex)
+	{
+		FAIL(ex.what());
 	}
 
 	{
