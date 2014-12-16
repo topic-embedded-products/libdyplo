@@ -50,7 +50,7 @@ dyplodemoapp_LDADD = libdyplo.la $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
 dyplodemocryptoapp_LDADD = libdyplo.la
 dyplodemohdlapp_LDADD = libdyplo.la
 
-dist_bin_SCRIPTS = testdyplohardware.sh
+dist_bin_SCRIPTS = testdyploall.sh
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = dyplo.pc
