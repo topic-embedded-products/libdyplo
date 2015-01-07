@@ -88,6 +88,10 @@ namespace dyplo
 			return result;
 		}
 
+		/* Call fcntl to set a flag like O_NONBLOCK or O_APPEND. Uses
+		 * F_GETFL and ORs the result with the flag for F_SETFL. */
+		void fcntl_set_flag(long flag);
+
 		bool poll_for_incoming_data(int timeout_in_seconds);
 		bool poll_for_outgoing_data(int timeout_in_seconds);
 		bool poll_for_incoming_data(struct timeval *timeout);

@@ -45,6 +45,15 @@ namespace dyplo
 			throw dyplo::IOException();
 	}
 
+	void File::fcntl_set_flag(long flag)
+	{
+		int flags = ::fcntl(handle, F_GETFL, 0);
+		if (flags < 0)
+			throw dyplo::IOException();
+		if (::fcntl(handle, F_SETFL, flags | flag) < 0)
+			throw dyplo::IOException();
+	}
+
 	bool File::poll_for_incoming_data(struct timeval *timeout)
 	{
 		fd_set fds;

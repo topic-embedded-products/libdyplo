@@ -83,14 +83,22 @@ static int get_dyplo_cpu_fifo_count()
 static int openFifo(int fifo, int access)
 {
 	std::ostringstream name;
-	if (access == O_RDONLY)
-		name << "/dev/dyplor";
-	else if (access == O_WRONLY)
-		name << "/dev/dyplow";
-	else
-		FAIL("bad access");
+	switch (access & O_ACCMODE)
+	{
+		case O_RDONLY:
+			name << "/dev/dyplor";
+			break;
+		case O_WRONLY:
+			name << "/dev/dyplow";
+			break;
+		default:
+			FAIL("bad access");
+	}
 	name << fifo;
-	return ::open(name.str().c_str(), access);
+	if (access & O_CREAT)
+		return ::open(name.str().c_str(), access, 0666);
+	else
+		return ::open(name.str().c_str(), access);
 }
 
 static void hardware_driver_clean_all_routes()
@@ -177,9 +185,11 @@ TEST(hardware_driver, c_fifo_single_open_rw_access)
 {
 	dyplo::HardwareContext ctrl;
 	File r0(ctrl.openFifo(0, O_RDONLY));
-	File r1(ctrl.openFifo(1, O_WRONLY)); /* Other fifo can be opened */
+	/* Other fifo can be opened */
+	File w1(ctrl.openFifo(1, O_WRONLY|O_APPEND));
+	/* Supply O_APPEND flag to disable EOF passing between fifos. */
 	ASSERT_THROW(File another_r0(ctrl.openFifo(0, O_RDONLY)), dyplo::IOException);
-	ASSERT_THROW(File another_r1(ctrl.openFifo(1, O_WRONLY)), dyplo::IOException);
+	ASSERT_THROW(File another_w1(ctrl.openFifo(1, O_WRONLY)), dyplo::IOException);
 	/* Cannot open input fifo for writing */
 	ASSERT_THROW(File r2w("/dev/dyplor2", O_WRONLY), dyplo::IOException);
 	/* Cannot open output fifo for reading */
@@ -473,7 +483,7 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0, int timeout_us 
 void hardware_driver_poll_single(int fifo)
 {
 	File fifo_in(openFifo(fifo, O_RDONLY));
-	File fifo_out(openFifo(fifo, O_WRONLY));
+	File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND)); /* Don't communicate EOF */
 	const int signature = 10000000 * (fifo+1);
 	int data = 42;
 
@@ -642,7 +652,7 @@ static void hardware_driver_irq_driven_read_single(int fifo)
 	dyplo::Thread reader;
 
 	File fifo_in(openFifo(fifo, O_RDONLY));
-	File fifo_out(openFifo(fifo, O_WRONLY));
+	File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
 	FileContext ctx(&fifo_in);
 	reader.start(thread_read_data, &ctx);
 	ctx.wait(); /* Block until we're calling "read" on the other thread*/
@@ -685,7 +695,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	ssize_t total_written;
 	{
 		/* Make it so that the pipe is filled to the brim */
-		File fifo_out(openFifo(fifo, O_WRONLY));
+		File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
 		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 		CHECK(fifo_out.poll_for_outgoing_data(0)); /* Must have room */
 		/* Fill it until it is full */
@@ -697,7 +707,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	}
 
 	File fifo_in(openFifo(fifo, O_RDONLY));
-	File fifo_out(openFifo(fifo, O_WRONLY));
+	File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
 	FileContext ctx(&fifo_out);
 	dyplo::Thread writer;
 
@@ -765,7 +775,7 @@ TEST(hardware_driver, i_cpu_block_crossbar)
 	{
 		int src = routes[i].srcFifo;
 		int dst = routes[i].dstFifo;
-		File f_src(ctrl.openFifo(src, O_WRONLY));
+		File f_src(ctrl.openFifo(src, O_WRONLY|O_APPEND));
 		File f_dst(ctrl.openFifo(dst, O_RDONLY));
 		ssize_t bytes_written = f_src.write(data, sizeof(data));
 		EQUAL((ssize_t)sizeof(data), bytes_written);
@@ -807,7 +817,7 @@ TEST(hardware_driver_hdl, j_hdl_block_processing)
 				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
 		}
 		/* Write some test data */
-		File hdl_in(context.openFifo(fifo, O_WRONLY));
+		File hdl_in(context.openFifo(fifo, O_WRONLY|O_APPEND));
 		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
 		EQUAL((ssize_t)sizeof(data), bytes_written);
 		/* Read results and verify */
@@ -843,7 +853,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 			EQUAL(data[i] + total_effect, buffer[i]);
 	}
 	{
-		File fifo_out(ctrl.openFifo(from_cpu_fifo, O_WRONLY));
+		File fifo_out(ctrl.openFifo(from_cpu_fifo, O_WRONLY|O_APPEND));
 		const int signature = 0x1000000;
 		/* Set output fifo in non-blocking mode */
 		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
@@ -1042,7 +1052,7 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 
 	{
 		dyplo::FilePollScheduler scheduler;
-		dyplo::File output_file(context.openFifo(0, O_WRONLY));
+		dyplo::File output_file(context.openFifo(0, O_WRONLY|O_APPEND));
 		dyplo::File input_file(context.openFifo(0, O_RDONLY));
 		dyplo::FileOutputQueue<int> output(scheduler, output_file, 2048);
 		dyplo::FileInputQueue<int> input(scheduler, input_file, 2048);

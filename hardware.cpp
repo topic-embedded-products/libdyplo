@@ -114,12 +114,17 @@ namespace dyplo
 	{
 		std::ostringstream name;
 		name << prefix;
-		if (access == O_RDONLY)
-			name << "r";
-		else if (access == O_WRONLY)
-			name << "w";
-		else
-			throw IOException(EACCES);
+		switch (access & O_ACCMODE)
+		{
+			case O_RDONLY:
+				name << "r";
+				break;
+			case O_WRONLY:
+				name << "w";
+				break;
+			default:
+				throw IOException(EACCES);
+		}
 		name << fifo;
 		return ::open(name.str().c_str(), access);
 	}
