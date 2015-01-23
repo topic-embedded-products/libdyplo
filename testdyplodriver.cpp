@@ -209,7 +209,7 @@ TEST(hardware_driver_hdl, d_io_control_route)
 	ctrl.routeDeleteAll();
 	int n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(n_routes, 0);
+	EQUAL(0, n_routes);
 	/* Set up single route */
 	ctrl.routeAddSingle(0,0,0,0);
 	n_routes =
