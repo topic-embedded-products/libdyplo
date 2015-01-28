@@ -27,7 +27,7 @@
 namespace yaffut {
 
 std::string const version = "1.0";
-    
+
 template <typename T>
 std::string demangle()
 {
@@ -41,14 +41,14 @@ std::string demangle()
   if(pos != std::string::npos)
   {
     name = name.substr(pos + 2);
-  }  
+  }
 #elif _MSC_VER
   std::string name(typeid(T).name());
   static const std::string struct_prefix("struct ");
   static const std::string class_prefix("class ");
   static const std::string ptr_postfix(" *");
   static const std::string anon_namespace_prefix("`anonymous namespace'::");
-      
+
   std::string::size_type
   at = name.find(struct_prefix);
   if(at != std::string::npos) { name.erase(at, struct_prefix.size()); }
@@ -170,10 +170,6 @@ public:
       return 0;
     }
 
-#if defined(__GNUC__) && !defined(_WIN32)
-    std::cout << "pid(" << getpid() << ")" << std::endl;
-#endif
-
     const char* all[] = {"All"};
     const char** test = all;
     int num = 1;
@@ -182,7 +178,7 @@ public:
       test = argv;
       num = argc;
     }
-    
+
     for(int i = 0; i < num; ++i)
     {
       try
@@ -285,11 +281,14 @@ template <typename Suite, typename Case = void>
 struct Test: public virtual Suite
 {
   static Registrator<Suite, Case> s_Registrator;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
   Test(): Suite()
   {
     Registrator<Suite, Case>* forceInstance = &s_Registrator;
     forceInstance = 0;
   }
+#pragma GCC diagnostic pop
 };
 template <typename Suite, typename Case>
 Registrator<Suite, Case> Test<Suite, Case>::s_Registrator;
@@ -331,7 +330,7 @@ inline void equal(const wchar_t* e, const wchar_t* a, const char* at = "", const
   if(std::wstring(e) != std::wstring(a))
   {
     throw failure(e, a, at, expr);
-  } 
+  }
 }
 inline void equal(double e, double a, const char* at = "", const char* expr = "")
 {
@@ -343,7 +342,7 @@ inline void equal(double e, double a, const char* at = "", const char* expr = ""
   }
 }
 inline void check(bool b, const char* at = "", const char* expr = "")
-{ 
+{
   if(!b)
   {
     throw failure(at, expr);

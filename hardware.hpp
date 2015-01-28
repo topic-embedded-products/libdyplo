@@ -44,6 +44,7 @@ namespace dyplo
 		int openConfig(int index, int access);
 		/* Use HardwareControl as more convenient access */
 		int openControl(int access);
+		int openDMA(int index, int access);
 
 		/* Program device using a partial bitstream */
 		static void setProgramMode(bool is_partial_bitstream);
@@ -78,7 +79,7 @@ namespace dyplo
 		{}
 
 		void routeDeleteAll();
-		void routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo);
+		void routeAddSingle(unsigned char srcNode, unsigned char srcFifo, unsigned char dstNode, unsigned char dstFifo);
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
 		void routeDelete(char node);
@@ -107,6 +108,10 @@ namespace dyplo
 		bool isNodeEnabled();
 		void enableNode();
 		void disableNode();
+		int getNodeIndex();
+		static int getNodeIndex(int file_descriptor);
+		void deleteRoutes();
+		static void deleteRoutes(int file_descriptor);
 	};
 
 	class HardwareFifo: public File
@@ -114,5 +119,10 @@ namespace dyplo
 	public:
 		HardwareFifo(int file_descriptor): File(file_descriptor) {}
 		void reset(); /* Reset fifo */
+		int getNodeAndFifoIndex(); /* Returns node | fifo << 8 */
+		static int getNodeAndFifoIndex(int file_descriptor);
+		void addRouteTo(int destination);
+		void addRouteFrom(int source);
+		unsigned int getDataTreshold();
 	};
 }

@@ -118,16 +118,13 @@ struct Stress
 		std::cout << " (" << nodes.size() << " nodes)";
 	}
 
-	int openAvailableFifo(int* id, int access)
+	int openAvailableFifo(int access)
 	{
 		for (int index = 0; index < 32; ++index)
 		{
 			int result = context.openFifo(index, access);
 			if (result != -1)
-			{
-				*id = index;
 				return result;
-			}
 			if (errno != EBUSY)
 				throw IOException();
 		}
@@ -149,15 +146,14 @@ static const unsigned int nr_of_lanes = 4;
 TEST(Stress, a_to_cpu)
 {
 	CHECK(nodes.size() != 0);
+	dyplo::HardwareFifo to_cpu(openAvailableFifo(O_RDONLY));
 	for (StressNodeList::iterator it = nodes.begin();	it != nodes.end(); ++it)
 	{
 		StressNode* node = *it;
 		control.routeDelete(node->id);
-		int to_cpu_id;
 		node->reset();
-		dyplo::HardwareFifo to_cpu(openAvailableFifo(&to_cpu_id, O_RDONLY));
 		to_cpu.reset(); /* Clear FIFO */
-		control.routeAddSingle(node->id, 0, 0, to_cpu_id);
+		to_cpu.addRouteFrom(node->id);
 		CHECK(! to_cpu.poll_for_incoming_data(0) );
 		node->reset_lane(0);
 		node->set_lane_params(0, StressNodeLane(0));
@@ -188,14 +184,13 @@ TEST(Stress, a_to_cpu)
 TEST(Stress, a_from_cpu)
 {
 	CHECK(nodes.size() != 0);
+	dyplo::HardwareFifo from_cpu(openAvailableFifo(O_WRONLY|O_APPEND));
 	for (StressNodeList::iterator it = nodes.begin();	it != nodes.end(); ++it)
 	{
 		StressNode* node = *it;
 		control.routeDelete(node->id);
-		int from_cpu_id;
 		node->reset();
-		dyplo::File from_cpu(openAvailableFifo(&from_cpu_id, O_WRONLY));
-		control.routeAddSingle(0, from_cpu_id, node->id, 0);
+		from_cpu.addRouteTo(node->id);
 		node->reset_lane(0);
 		node->set_lane_params(0, StressNodeLane(0));
 		node->enable(1);

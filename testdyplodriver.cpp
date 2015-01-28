@@ -101,34 +101,35 @@ static int openFifo(int fifo, int access)
 		return ::open(name.str().c_str(), access);
 }
 
-static void hardware_driver_clean_all_routes()
-{
-	try
-	{
-		/* Clean all routes */
-		dyplo::HardwareContext ctx;
-		dyplo::HardwareControl ctrl(ctx);
-		ctrl.routeDeleteAll();
-	}
-	catch (const std::exception& ex)
-	{
-		std::cout << "ERROR in cleanup: " << ex.what() << std::endl;
-	}
-}
-
 struct hardware_driver
 {
 };
 
-struct hardware_driver_hdl
+struct hardware_driver_ctx
 {
 	dyplo::HardwareContext context;
-	std::vector<int> adders;
+	~hardware_driver_ctx()
+	{
+		try
+		{
+			dyplo::HardwareControl ctrl(context);
+			ctrl.routeDeleteAll();
+		}
+		catch (const std::exception& ex)
+		{
+			std::cout << "ERROR in cleanup: " << ex.what() << std::endl;
+		}
+	}
+};
+
+struct hardware_driver_hdl: public hardware_driver_ctx
+{
+	std::vector<unsigned char> adders;
 	hardware_driver_hdl()
 	{
 		dyplo::HardwareControl ctrl(context);
 		context.setProgramMode(true); /* partial */
-		for (int id = 1; id < 32; ++id)
+		for (unsigned char id = 1; id < 32; ++id)
 		{
 			std::string filename =
 				context.findPartition("adder", id);
@@ -144,18 +145,6 @@ struct hardware_driver_hdl
 		}
 		/* Need at least 2 adders for these tests */
 		CHECK(adders.size() >= 2);
-	}
-	~hardware_driver_hdl()
-	{
-		try
-		{
-			dyplo::HardwareControl ctrl(context);
-			ctrl.routeDeleteAll();
-		}
-		catch (const std::exception& ex)
-		{
-			std::cout << "ERROR in cleanup: " << ex.what() << std::endl;
-		}
 	}
 };
 
@@ -211,7 +200,42 @@ static int connect_all_fifos_in_loop()
 	return dyplo_cpu_fifo_count;
 }
 
-TEST(hardware_driver_hdl, d_io_control_route)
+TEST(hardware_driver_ctx, d_io_control_route_cfg)
+{
+	/* Each config node must know its own ID */
+	for (int i = 0; i < 32; ++i)
+	{
+		int fd = context.openConfig(i, O_RDONLY);
+		if (fd < 0)
+			continue; /* Skip if non existent or busy */
+		dyplo::HardwareConfig cfg(fd);
+		EQUAL(i, cfg.getNodeIndex());
+	}
+}
+
+TEST(hardware_driver_ctx, d_io_control_route_fifo)
+{
+	/* Each config node must know its own ID */
+	for (int i = 0; i < 32; ++i)
+	{
+		int fd = context.openFifo(i, O_RDONLY);
+		if (fd >= 0)
+		{
+			dyplo::HardwareFifo fifo(fd);
+			int index = fifo.getNodeAndFifoIndex();
+			EQUAL(i, index >> 8);
+		}
+		fd = context.openFifo(i, O_WRONLY|O_APPEND);
+		if (fd >= 0)
+		{
+			dyplo::HardwareFifo fifo(fd);
+			int index = fifo.getNodeAndFifoIndex();
+			EQUAL(i, index >> 8);
+		}
+	}
+}
+
+TEST(hardware_driver_ctx, d_io_control_route_cpu)
 {
 	dyplo::HardwareControl::Route routes[64];
 	dyplo::HardwareControl ctrl(context);
@@ -245,11 +269,108 @@ TEST(hardware_driver_hdl, d_io_control_route)
 	EQUAL(1, (int)routes[1].srcFifo);
 	EQUAL(0, (int)routes[1].dstNode);
 	EQUAL(2, (int)routes[1].dstFifo);
-	ctrl.routeAddSingle(0,1,0,1);
+	ctrl.routeDeleteAll();
+	/* Setup loopback system (1->0, 1->1 etc) */
+	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	std::cout << " (" << dyplo_cpu_fifo_count << ")";
+	CHECK(dyplo_cpu_fifo_count > 0);
+	n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(dyplo_cpu_fifo_count, n_routes);
+	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
+	{
+		EQUAL(0, routes[fifo].srcNode);
+		EQUAL(fifo, routes[fifo].srcFifo);
+		EQUAL(0, routes[fifo].dstNode);
+		EQUAL(fifo, routes[fifo].dstFifo);
+	}
+}
+
+TEST(hardware_driver_ctx, d_io_control_route_directly_fifo)
+{
+	/* Using ioctl on device to directly create routes to/from it */
+	dyplo::HardwareControl::Route routes[64];
+	dyplo::HardwareControl ctrl(context);
+	/* Clean all routes */
+	ctrl.routeDeleteAll();
+	int n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(0, n_routes);
+
+	dyplo::HardwareFifo fifo1(context.openFifo(1, O_RDONLY));
+	dyplo::HardwareFifo fifo2(context.openFifo(2, O_WRONLY|O_APPEND));
+	/* set up route from 2 to 1 */
+	int fifo1_id = fifo1.getNodeAndFifoIndex();
+	int fifo2_id = fifo2.getNodeAndFifoIndex();
+	
+	fifo1.addRouteFrom(fifo2_id);
+	n_routes = ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(1, n_routes);
+	EQUAL(fifo2_id & 0xFF, (int)routes[0].srcNode);
+	EQUAL((fifo2_id >> 8) & 0xFF, (int)routes[0].srcFifo);
+	EQUAL(fifo1_id & 0xFF, (int)routes[0].dstNode);
+	EQUAL((fifo1_id >> 8) & 0xFF, (int)routes[0].dstFifo);
+
+	ctrl.routeDeleteAll();
+	fifo2.addRouteTo(fifo1_id);
+	n_routes = ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(1, n_routes);
+	EQUAL(fifo2_id & 0xFF, (int)routes[0].srcNode);
+	EQUAL((fifo2_id >> 8) & 0xFF, (int)routes[0].srcFifo);
+	EQUAL(fifo1_id & 0xFF, (int)routes[0].dstNode);
+	EQUAL((fifo1_id >> 8) & 0xFF, (int)routes[0].dstFifo);
+	
+	/* Cannot add routes in the wrong direction */
+	ASSERT_THROW(fifo1.addRouteTo(fifo2_id), dyplo::IOException);
+	ASSERT_THROW(fifo2.addRouteFrom(fifo1_id), dyplo::IOException);
+}
+
+TEST(hardware_driver_ctx, d_io_control_route_directly_dma)
+{
+	/* Using ioctl on device to directly create routes to/from it */
+	dyplo::HardwareControl::Route routes[64];
+	dyplo::HardwareControl ctrl(context);
+	/* Clean all routes */
+	ctrl.routeDeleteAll();
+	int n_routes =
+		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(0, n_routes);
+
+	dyplo::HardwareFifo dma0r(context.openDMA(0, O_RDONLY));
+	dyplo::HardwareFifo dma0w(context.openDMA(0, O_WRONLY));
+	int dma0r_id = dma0r.getNodeAndFifoIndex();
+	int dma0w_id = dma0w.getNodeAndFifoIndex();
+
+	dma0r.addRouteFrom(dma0w_id);
+	n_routes = ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(1, n_routes);
+	EQUAL(dma0w_id & 0xFF, (int)routes[0].srcNode);
+	EQUAL((dma0w_id >> 8) & 0xFF, (int)routes[0].srcFifo);
+	EQUAL(dma0r_id & 0xFF, (int)routes[0].dstNode);
+	EQUAL((dma0r_id >> 8) & 0xFF, (int)routes[0].dstFifo);
+
+	ctrl.routeDeleteAll();
+	dma0w.addRouteTo(dma0r_id);
+	n_routes = ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
+	EQUAL(1, n_routes);
+	EQUAL(dma0w_id & 0xFF, (int)routes[0].srcNode);
+	EQUAL((dma0w_id >> 8) & 0xFF, (int)routes[0].srcFifo);
+	EQUAL(dma0r_id & 0xFF, (int)routes[0].dstNode);
+	EQUAL((dma0r_id >> 8) & 0xFF, (int)routes[0].dstFifo);
+
+	ASSERT_THROW(dma0r.addRouteTo(dma0w_id), dyplo::IOException);
+	ASSERT_THROW(dma0w.addRouteFrom(dma0r_id), dyplo::IOException);
+}
+
+TEST(hardware_driver_hdl, d_io_control_route_hdl)
+{
+	dyplo::HardwareControl::Route routes[64];
+	dyplo::HardwareControl ctrl(context);
+	int n_routes;
 	/* Test routes to and from the adder nodes. The adders have 4 inputs
 	 * and 4 outputs each. */
-	const int ADDER1 = adders[0];
-	const int ADDER2 = adders[1];
+	const unsigned char ADDER1 = adders[0];
+	const unsigned char ADDER2 = adders[1];
 	ctrl.routeDeleteAll();
 	ctrl.routeAddSingle(ADDER2,1,0,4);
 	n_routes =
@@ -296,20 +417,6 @@ TEST(hardware_driver_hdl, d_io_control_route)
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(0, n_routes);
-	/* Setup loopback system (1->0, 1->1 etc) */
-	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
-	std::cout << " (" << dyplo_cpu_fifo_count << ")";
-	CHECK(dyplo_cpu_fifo_count > 0);
-	n_routes =
-		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(dyplo_cpu_fifo_count, n_routes);
-	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
-	{
-		EQUAL(0, routes[fifo].srcNode);
-		EQUAL(fifo, routes[fifo].srcFifo);
-		EQUAL(0, routes[fifo].dstNode);
-		EQUAL(fifo, routes[fifo].dstFifo);
-	}
 }
 
 TEST(hardware_driver, d_io_control_backplane)
@@ -672,7 +779,7 @@ TEST(hardware_driver, g_irq_driven_read)
 }
 
 static int extra_data_to_write_in_thread[] =
-	{0xD4741337, 0x12345678, 0xFEEDB4B3, 0x54FEF00D};
+	{(int)0xD4741337, 0x12345678, (int)0xFEEDB4B3, (int)0x54FEF00D};
 
 void* thread_write_data(void* arg)
 {
@@ -762,14 +869,14 @@ TEST(hardware_driver, i_cpu_block_crossbar)
 	CHECK(nr_read_fifos >= 4);
 	CHECK(nr_write_fifos >= 4);
 	const dyplo::HardwareControl::Route routes[] = {
-		{0, 0, nr_read_fifos/2, 0},
-		{nr_write_fifos/2, 0, 1, 0},
-		{nr_write_fifos/2 + 1, 0, nr_read_fifos-1, 0},
-		{nr_write_fifos-1, 0, nr_read_fifos/2+1, 0},
+		{0, 0, (unsigned char)(nr_read_fifos/2), 0},
+		{(unsigned char)(nr_write_fifos/2), 0, 1, 0},
+		{(unsigned char)(nr_write_fifos/2 + 1), 0, (unsigned char)(nr_read_fifos-1), 0},
+		{(unsigned char)(nr_write_fifos-1), 0, (unsigned char)(nr_read_fifos/2+1), 0},
 	};
 	dyplo::HardwareContext ctrl;
 	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
-	int data[] = {0x12345678, 0xDEADBEEF};
+	int data[] = {0x12345678, (int)0xDEADBEEF};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
 	for (unsigned int i = 0; i < sizeof(routes)/sizeof(routes[0]); ++i)
 	{
@@ -797,8 +904,8 @@ TEST(hardware_driver_hdl, j_hdl_block_processing)
 	static const int hdl_configuration_blob[] = {
 		1, 10001, -1000, 100
 	};
-	const int ADDER1 = adders[0];
-	const int ADDER2 = adders[1];
+	const unsigned char ADDER1 = adders[0];
+	const unsigned char ADDER2 = adders[1];
 	const dyplo::HardwareControl::Route routes[] = {
 		{0, ADDER1, 0, 0},
 		{0, 0, 0, ADDER1}, /* Fifo 0 to HDL #1 port 0 */
@@ -921,8 +1028,8 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
-	const int ADDER1 = adders[0];
-	const int ADDER2 = adders[1];
+	const unsigned char ADDER1 = adders[0];
+	const unsigned char ADDER2 = adders[1];
 	const dyplo::HardwareControl::Route routes[] = {
 		{0, ADDER1, 6, 0}, /* 0.6 -> 1.0 */
 		{0, ADDER2, 0, ADDER1}, /* 1.0 -> 2.0 */
@@ -963,8 +1070,8 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
 		total_effect += 2 * hdl_configuration_blob[i];
 	/* Set up route: Loop through the HDL blocks four times */
-	const int ADDER1 = adders[0];
-	const int ADDER2 = adders[1];
+	const unsigned char ADDER1 = adders[0];
+	const unsigned char ADDER2 = adders[1];
 	const dyplo::HardwareControl::Route routes[] = {
 		{0, ADDER1, 4, 0}, /* 0.4 -> 1.0 */
 		{1, ADDER1, 0, ADDER1}, /* -> 1.1 */
@@ -1032,7 +1139,7 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 		0, 0, 0, 0,
 	};
 	/* Set up route: Loop through the HDL block */
-	const int ADDER1 = adders[0];
+	const unsigned char ADDER1 = adders[0];
 	const dyplo::HardwareControl::Route routes[] = {
 		{0, ADDER1, 0, 0}, /* 0.0 -> 1.0 */
 		{0, 0, 0, ADDER1}, /* 1.0 -> 0.0 */
@@ -1108,4 +1215,146 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 		}
 	}
 	check_all_input_fifos_are_empty();
+}
+
+TEST(hardware_driver_ctx, n_dma_cpu_transfer)
+{
+	dyplo::HardwareFifo dma0w(context.openDMA(0, O_WRONLY));
+	dyplo::HardwareFifo cpu(context.openFifo(2, O_RDONLY));
+	
+	cpu.addRouteFrom(dma0w.getNodeAndFifoIndex());
+	
+	unsigned int dmaBufferSize = dma0w.getDataTreshold();
+	/* Expect a sensible size, even 1k is rediculously small, but still
+	 * bigger than what the (non-DMA) CPU node would support */
+	CHECK(dmaBufferSize > 1024);
+	unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+	unsigned int seed = 0;
+	std::vector<unsigned int> testdata(dmaBufferSizeWords);
+	std::vector<unsigned int> testresult(dmaBufferSizeWords);
+	/* No data yet */
+	CHECK(! cpu.poll_for_incoming_data(0) );
+	/* Plenty space to write into */
+	CHECK(dma0w.poll_for_outgoing_data(0));
+	
+	for (unsigned int repeat = 0; repeat < 10; ++repeat)
+	{
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			testdata[i] = seed + i;
+		/* Must be able to send a full buffer without blocking */
+		dma0w.write(&testdata[0], dmaBufferSize);
+		/* And read it all back without blocking too */
+		cpu.read(&testresult[0], dmaBufferSize);
+		/* Verify the data */
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			EQUAL(testdata[i], testresult[i]);
+		seed += dmaBufferSizeWords;
+		/* No data left */
+		CHECK(! cpu.poll_for_incoming_data(0) );
+	}
+}
+
+TEST(hardware_driver_ctx, o_cpu_dma_transfer)
+{
+	dyplo::HardwareFifo dma0r(context.openDMA(0, O_RDONLY));
+	dyplo::HardwareFifo cpu(context.openFifo(2, O_WRONLY|O_APPEND));
+	
+	cpu.addRouteTo(dma0r.getNodeAndFifoIndex());
+	
+	unsigned int dmaBufferSize = dma0r.getDataTreshold();
+	/* Expect a sensible size, even 1k is rediculously small, but still
+	 * bigger than what the (non-DMA) CPU node would support */
+	CHECK(dmaBufferSize > 1024);
+	unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+	unsigned int seed = 0;
+	std::vector<unsigned int> testdata(dmaBufferSizeWords);
+	std::vector<unsigned int> testresult(dmaBufferSizeWords);
+	
+	/* No data yet. This also has the side-effect of starting
+	 * the DMA data pump, so writing to the cpu node will not block */
+	CHECK(! dma0r.poll_for_incoming_data(0) );
+
+	for (unsigned int repeat = 0; repeat < 10; ++repeat)
+	{
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			testdata[i] = seed + i;
+		/* Must be able to send a full buffer without blocking */
+		cpu.write(&testdata[0], dmaBufferSize);
+		/* And read it all back without blocking too */
+		dma0r.read(&testresult[0], dmaBufferSize);
+		/* Verify the data */
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			EQUAL(testdata[i], testresult[i]);
+		seed += dmaBufferSizeWords;
+	}
+
+	/* No leftovers */
+	CHECK(! dma0r.poll_for_incoming_data(0) );
+}
+
+TEST(hardware_driver_ctx, p_dma_loopback)
+{
+	dyplo::HardwareFifo dma0w(context.openDMA(0, O_WRONLY));
+	dyplo::HardwareFifo dma0r(context.openDMA(0, O_RDONLY));
+	
+	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+	
+	unsigned int dmaBufferSize = dma0w.getDataTreshold();
+	/* Expect a sensible size, even 1k is rediculously small, but still
+	 * bigger than what the (non-DMA) CPU node would support */
+	CHECK(dmaBufferSize > 1024);
+	unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+	unsigned int seed = 0;
+	std::vector<unsigned int> testdata(dmaBufferSizeWords);
+	std::vector<unsigned int> testresult(dmaBufferSizeWords);
+
+	/* No data yet. This also has the side-effect of starting
+	 * the DMA data pump, so writing to the cpu node will not block */
+	CHECK(! dma0r.poll_for_incoming_data(0) );
+	/* Plenty space to write into */
+	CHECK(dma0w.poll_for_outgoing_data(0));
+
+	/* "Prime" the transfer */
+	for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+		testdata[i] = seed + i;
+	/* Must be able to send 2x full buffer without blocking */
+	dma0w.write(&testdata[0], dmaBufferSize);
+
+	for (unsigned int repeat = 0; repeat < 64; ++repeat)
+	{
+		unsigned int prevseed = seed;
+		seed += dmaBufferSizeWords;
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			testdata[i] = seed + i;
+		/* Must be able to send a full buffer without blocking */
+		dma0w.write(&testdata[0], dmaBufferSize);
+		/* And read it all back without blocking too */
+		dma0r.read(&testresult[0], dmaBufferSize);
+		/* Verify the data */
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i) {
+			if (prevseed + i != testresult[i])
+			{
+				std::ostringstream msg;
+				msg << "Mismatch at repeat=" << repeat << " i=" << i
+					<< " expect=" << (prevseed+i) << " result=" << testresult[i] << "\n";
+				unsigned int limit = i + 64;
+				if (limit > dmaBufferSizeWords)
+					limit = dmaBufferSizeWords;
+				i = (i < 16) ? 0 : (i - 16) & ~3;
+				for ( ;i < limit; ++i) {
+					if ((i % 4) == 0)
+						msg << "\n";
+					msg << " [" << i << "]=" << testresult[i];
+				}
+				FAIL(msg.str());
+			}
+		}
+	}
+	dma0r.read(&testresult[0], dmaBufferSize);
+	/* Verify the data */
+	for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+		EQUAL(testdata[i], testresult[i]);
+
+	CHECK(! dma0r.poll_for_incoming_data(0) );
+	CHECK(dma0w.poll_for_outgoing_data(0));
 }

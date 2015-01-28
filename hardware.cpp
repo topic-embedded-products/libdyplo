@@ -62,11 +62,16 @@ struct dyplo_route_t  {
 #define DYPLO_IOC_ROUTE_GET	0x02
 #define DYPLO_IOC_ROUTE_TELL	0x03
 #define DYPLO_IOC_ROUTE_DELETE	0x04
+#define DYPLO_IOC_ROUTE_TELL_TO_LOGIC	0x05
+#define DYPLO_IOC_ROUTE_TELL_FROM_LOGIC	0x06
+#define DYPLO_IOC_ROUTE_QUERY_ID	0x07
 #define DYPLO_IOC_BACKPLANE_STATUS	0x08
 #define DYPLO_IOC_BACKPLANE_DISABLE	0x09
 #define DYPLO_IOC_BACKPLANE_ENABLE	0x0A
 #define DYPLO_IOC_RESET_FIFO_WRITE	0x0C
 #define DYPLO_IOC_RESET_FIFO_READ	0x0D
+#define DYPLO_IOC_TRESHOLD_QUERY	0x10
+#define DYPLO_IOC_TRESHOLD_TELL	0x11
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -77,6 +82,15 @@ struct dyplo_route_t  {
 #define DYPLO_IOCTROUTE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL)
 /* Remove routes to a node. Argument is a integer node number. */
 #define DYPLO_IOCTROUTE_DELETE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_DELETE)
+/* Add a route from "this" dma or cpu node to another node. The argument
+ * is an integer of destination node | fifo << 8 */
+#define DYPLO_IOCTROUTE_TELL_TO_LOGIC	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL_TO_LOGIC)
+/* Add a route from another node into "this" dma or cpu node. Argument
+ * is an integer of source node | fifo << 8 */
+#define DYPLO_IOCTROUTE_TELL_FROM_LOGIC	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL_FROM_LOGIC)
+/* Get the node number and fifo (if applicable) for this cpu or dma
+ * node. Returns an integer of node | fifo << 8 */
+#define DYPLO_IOCQROUTE_QUERY_ID	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_QUERY_ID)
 /* Get backplane status. When called on control node, returns a bit mask where 0=CPU and
  * 1=first HDL node and so on. When called on config node, returns the status for only
  * that node, 0=disabled, non-zero is enabled */
@@ -90,6 +104,11 @@ struct dyplo_route_t  {
  * reset), or to a CPU read/write fifo (argument ignored). */
 #define DYPLO_IOCRESET_FIFO_WRITE	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_RESET_FIFO_WRITE)
 #define DYPLO_IOCRESET_FIFO_READ	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_RESET_FIFO_READ)
+/* Set the thresholds for "writeable" or "readable" on a CPU node fifo. Allows
+ * tuning for low latency or reduced interrupt rate. On the DMA node, these
+ * will get the DMA buffer size */
+#define DYPLO_IOCQTRESHOLD   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_TRESHOLD_QUERY)
+#define DYPLO_IOCTTRESHOLD   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_TRESHOLD_TELL)
 }
 
 namespace dyplo
@@ -126,6 +145,13 @@ namespace dyplo
 				throw IOException(EACCES);
 		}
 		name << fifo;
+		return ::open(name.str().c_str(), access);
+	}
+
+	int HardwareContext::openDMA(int index, int access)
+	{
+		std::ostringstream name;
+		name << prefix << "d" << index;
 		return ::open(name.str().c_str(), access);
 	}
 
@@ -343,7 +369,7 @@ namespace dyplo
 			throw IOException(__func__);
 	}
 
-	void HardwareControl::routeAddSingle(char srcNode, char srcFifo, char dstNode, char dstFifo)
+	void HardwareControl::routeAddSingle(unsigned char srcNode, unsigned char srcFifo, unsigned char dstNode, unsigned char dstFifo)
 	{
 		struct dyplo_route_item_t route =
 			{dstFifo, dstNode, srcFifo, srcNode};
@@ -476,10 +502,71 @@ namespace dyplo
 			throw IOException(__func__);
 	}
 
+	int HardwareConfig::getNodeIndex()
+	{
+		return getNodeIndex(handle);
+	}
+
+	int HardwareConfig::getNodeIndex(int file_descriptor)
+	{
+		int result = ::ioctl(file_descriptor, DYPLO_IOCQROUTE_QUERY_ID);
+		if (result < 0)
+			throw IOException(__func__);
+		return result;
+	}
+
+	void HardwareConfig::deleteRoutes()
+	{
+		deleteRoutes(handle);
+	}
+
+	void HardwareConfig::deleteRoutes(int file_descriptor)
+	{
+		int result = ::ioctl(file_descriptor, DYPLO_IOCTROUTE_DELETE);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+
 	void HardwareFifo::reset()
 	{
 		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_WRITE);
 		if (result < 0)
 			throw IOException(__func__);
+	}
+
+	int HardwareFifo::getNodeAndFifoIndex()
+	{
+		return getNodeAndFifoIndex(handle);
+	}
+
+	int HardwareFifo::getNodeAndFifoIndex(int file_descriptor)
+	{
+		int result = ::ioctl(file_descriptor, DYPLO_IOCQROUTE_QUERY_ID);
+		if (result < 0)
+			throw IOException(__func__);
+		return result;
+	}
+
+	void HardwareFifo::addRouteTo(int destination)
+	{
+		int result = ::ioctl(handle, DYPLO_IOCTROUTE_TELL_TO_LOGIC, destination);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	void HardwareFifo::addRouteFrom(int source)
+	{
+		int result = ::ioctl(handle, DYPLO_IOCTROUTE_TELL_FROM_LOGIC, source);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	unsigned int HardwareFifo::getDataTreshold()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCQTRESHOLD);
+		if (result < 0)
+			throw IOException(__func__);
+		return (unsigned int)result;
 	}
 }
