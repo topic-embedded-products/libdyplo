@@ -264,7 +264,7 @@ TEST(hardware_driver_hdl, d_io_control_route)
 	EQUAL(0, (int)routes[0].srcFifo);
 	EQUAL(0, (int)routes[0].dstNode);
 	EQUAL(5, (int)routes[0].dstFifo);
-	ctrl.routeAddSingle(ADDER2,0,1,0);
+	ctrl.routeAddSingle(ADDER2,0,ADDER1,0);
 	ctrl.routeAddSingle(0,0,ADDER1,1);
 	ctrl.routeAddSingle(0,1,ADDER2,1);
 	ctrl.routeAddSingle(ADDER2,1,0,1);
@@ -281,7 +281,7 @@ TEST(hardware_driver_hdl, d_io_control_route)
 		CHECK(routes[i].dstNode != ADDER1);
 		CHECK(routes[i].srcNode != ADDER1);
 	}
-	EQUAL(3, n_routes); /* Only ADDER2 routes must remain */
+	EQUAL(2, n_routes); /* Only ADDER2 routes must remain */
 	ctrl.routeDelete(ADDER2);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
