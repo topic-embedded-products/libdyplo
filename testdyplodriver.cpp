@@ -1358,3 +1358,51 @@ TEST(hardware_driver_ctx, p_dma_loopback)
 	CHECK(! dma0r.poll_for_incoming_data(0) );
 	CHECK(dma0w.poll_for_outgoing_data(0));
 }
+
+TEST(hardware_driver_ctx, p_dma_nonblocking_io)
+{
+	dyplo::HardwareFifo dma0w(context.openDMA(0, O_WRONLY));
+	dyplo::HardwareFifo dma0r(context.openDMA(0, O_RDONLY));
+	
+	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+	unsigned int dmaBufferSize = dma0w.getDataTreshold();
+	/* Expect a sensible size, even 1k is rediculously small, but still
+	 * bigger than what the (non-DMA) CPU node would support */
+	CHECK(dmaBufferSize > 1024);
+	unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+	unsigned int seed = 0;
+	std::vector<unsigned int> testdata(dmaBufferSizeWords);
+	std::vector<unsigned int> testresult(dmaBufferSizeWords);
+
+	/* Enable non-blocking IO */
+	dma0w.fcntl_set_flag(O_NONBLOCK);
+	dma0r.fcntl_set_flag(O_NONBLOCK);
+
+	/* No data yet, so read will block and write won't */
+	CHECK(!dma0r.poll_for_incoming_data(0));
+	CHECK(dma0w.poll_for_outgoing_data(0));
+	/* Read from empty fifo, must not block but return EAGAIN error */
+	ASSERT_THROW(dma0r.read(&testresult[0], dmaBufferSize), dyplo::IOException);
+
+	for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+		testdata[i] = seed + i;
+	/* Must be able to send 1 full buffer without blocking */
+	EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
+	/* And once the data flows into the reader, more is available */
+	CHECK(dma0w.poll_for_outgoing_data(1));
+
+	unsigned int total_read = 0;
+	while (total_read != dmaBufferSize) {
+		/* Data must arrive at incoming node */
+		CHECK(dma0r.poll_for_incoming_data(1));
+		size_t bytes = dma0r.read(&testresult[0], dmaBufferSize);
+		unsigned int words = bytes / sizeof(int);
+		CHECK(bytes);
+		for (unsigned int i = 0; i < words; ++i)
+			EQUAL(seed + i, testresult[i]);
+		total_read += bytes;
+		seed += words;
+	}
+	/* All done, no more data */
+	CHECK(!dma0r.poll_for_incoming_data(0));
+}
