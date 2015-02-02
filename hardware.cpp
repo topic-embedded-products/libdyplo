@@ -72,6 +72,8 @@ struct dyplo_route_t  {
 #define DYPLO_IOC_RESET_FIFO_READ	0x0D
 #define DYPLO_IOC_TRESHOLD_QUERY	0x10
 #define DYPLO_IOC_TRESHOLD_TELL	0x11
+#define DYPLO_IOC_USERSIGNAL_QUERY	0x12
+#define DYPLO_IOC_USERSIGNAL_TELL	0x13
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -109,6 +111,10 @@ struct dyplo_route_t  {
  * will get the DMA buffer size */
 #define DYPLO_IOCQTRESHOLD   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_TRESHOLD_QUERY)
 #define DYPLO_IOCTTRESHOLD   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_TRESHOLD_TELL)
+/* Set or get user signal bits. These are the upper 4 bits of Dyplo data
+ * that aren't part of the actual data, but control the flow. */
+#define DYPLO_IOCQUSERSIGNAL   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_USERSIGNAL_QUERY)
+#define DYPLO_IOCTUSERSIGNAL   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_USERSIGNAL_TELL)
 }
 
 namespace dyplo
@@ -565,6 +571,21 @@ namespace dyplo
 	unsigned int HardwareFifo::getDataTreshold()
 	{
 		int result = ::ioctl(handle, DYPLO_IOCQTRESHOLD);
+		if (result < 0)
+			throw IOException(__func__);
+		return (unsigned int)result;
+	}
+
+	void HardwareFifo::setUserSignal(int usersignal)
+	{
+		int result = ::ioctl(handle, DYPLO_IOCTUSERSIGNAL, usersignal);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
+	int HardwareFifo::getUserSignal()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCQUSERSIGNAL);
 		if (result < 0)
 			throw IOException(__func__);
 		return (unsigned int)result;

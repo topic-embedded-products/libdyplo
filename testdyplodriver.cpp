@@ -1406,3 +1406,95 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 	/* All done, no more data */
 	CHECK(!dma0r.poll_for_incoming_data(0));
 }
+
+TEST(hardware_driver_ctx, q_fifo_usersignal)
+{
+	dyplo::HardwareFifo fifo1(context.openFifo(1, O_RDONLY));
+	dyplo::HardwareFifo fifo2(context.openFifo(2, O_WRONLY|O_APPEND));
+	fifo1.addRouteFrom(fifo2.getNodeAndFifoIndex());
+
+	int data = 0x12345678;
+	int result = 0;
+	EQUAL(0, fifo2.getUserSignal()); /* Signal is initially 0 */
+	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	EQUAL(sizeof(result), fifo1.read(&result, sizeof(result)));
+	EQUAL(data, result);
+	EQUAL(0, fifo1.getUserSignal());
+
+	++data;
+	fifo2.setUserSignal(1);
+	EQUAL(1, fifo2.getUserSignal());
+	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	/* Change in user signal causes read() to return less data, even
+	 * though the data has already arrived. */
+	CHECK(fifo1.poll_for_incoming_data(1));
+	EQUAL(0, fifo1.read(&result, sizeof(result)));
+	EQUAL(1, fifo1.getUserSignal());
+	/* Next read returns the data */
+	EQUAL(sizeof(result), fifo1.read(&result, sizeof(result)));
+	EQUAL(data, result);
+
+    /* Transfer 3 items each with different usersignals */
+	data = 101;
+	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	fifo2.setUserSignal(2);
+	++data;
+	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	fifo2.setUserSignal(3);
+	++data;
+	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	CHECK(fifo1.poll_for_incoming_data(1));
+	int results[4];
+	/* Read must only return a single item even though more are available */
+	EQUAL(sizeof(results[0]), fifo1.read(results, sizeof(results)));
+	EQUAL(101, results[0]);
+	/* The signal is for the NEXT read, not the previous */
+	EQUAL(2, fifo1.getUserSignal());
+	EQUAL(sizeof(results[0]), fifo1.read(results, sizeof(results)));
+	EQUAL(102, results[0]);
+	EQUAL(3, fifo1.getUserSignal());
+	EQUAL(sizeof(results[0]), fifo1.read(results, sizeof(results[0])));
+	EQUAL(103, results[0]);
+	EQUAL(3, fifo1.getUserSignal());
+}
+
+TEST(hardware_driver_ctx, q_dma_usersignal)
+{
+	dyplo::HardwareFifo fifo1(context.openDMA(0, O_RDONLY));
+	//dyplo::HardwareFifo fifo2(context.openDMA(0, O_WRONLY|O_APPEND));
+	dyplo::HardwareFifo fifo2(context.openFifo(0, O_WRONLY|O_APPEND));
+	fifo1.addRouteFrom(fifo2.getNodeAndFifoIndex());
+
+	/* Inside knowledge: The DMA block size is 1/4 of the total buffer */
+	const unsigned int blocksize = (unsigned int)fifo1.getDataTreshold() / 4;
+	const unsigned int smallblock = sizeof(int) * 64;
+
+	std::vector<int> data(blocksize/sizeof(int));
+	std::vector<int> result(blocksize/sizeof(int));
+	data[0] = 0xB0F;
+	data[smallblock / sizeof(int) - 1] = 0xE0B;
+	data[smallblock / sizeof(int)] = 0x50B;
+	data[data.size() - 1] = 0xE0F;
+	EQUAL(0, fifo1.getUserSignal());
+	EQUAL(0, fifo2.getUserSignal()); /* Signal is initially 0 */
+	EQUAL(smallblock, fifo2.write(&data[0], smallblock));
+	CHECK(!fifo1.poll_for_incoming_data(0)); /* No data on input yet */
+	fifo2.setUserSignal(1);
+	EQUAL(1, fifo2.getUserSignal());
+	EQUAL(smallblock, fifo2.write(&data[0], smallblock));
+	/* Even the small transfer must trigger the read queue now */
+	CHECK(fifo1.poll_for_incoming_data(1));
+	EQUAL(smallblock, fifo1.read(&result[0], blocksize));
+	EQUAL(data[0], result[0]);
+	EQUAL(data[smallblock / sizeof(int) - 1], result[smallblock / sizeof(int) - 1]);
+	EQUAL(1, fifo2.getUserSignal());
+
+	/* Flush it all out */
+	fifo2.setUserSignal(2);
+	EQUAL(2, fifo2.getUserSignal());
+	EQUAL(blocksize, fifo2.write(&data[0], blocksize));
+	CHECK(fifo1.poll_for_incoming_data(1));
+	EQUAL(blocksize, fifo1.read(&result[0], blocksize));
+	EQUAL(2, fifo1.getUserSignal());
+	EQUAL(data[0], result[0]);
+}

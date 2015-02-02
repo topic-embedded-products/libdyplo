@@ -124,5 +124,7 @@ namespace dyplo
 		void addRouteTo(int destination);
 		void addRouteFrom(int source);
 		unsigned int getDataTreshold();
+		void setUserSignal(int usersignal);
+		int getUserSignal();
 	};
 }
