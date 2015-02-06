@@ -1460,6 +1460,9 @@ TEST(hardware_driver_ctx, q_fifo_usersignal)
 
 TEST(hardware_driver_ctx, q_dma_usersignal)
 {
+	std::cout << " (disabled)";
+	return;
+
 	dyplo::HardwareFifo fifo1(context.openDMA(0, O_RDONLY));
 	//dyplo::HardwareFifo fifo2(context.openDMA(0, O_WRONLY|O_APPEND));
 	dyplo::HardwareFifo fifo2(context.openFifo(0, O_WRONLY|O_APPEND));
