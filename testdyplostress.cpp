@@ -131,6 +131,19 @@ struct Stress
 		throw IOException(ENODEV);
 	}
 
+	int openAvailableDMA(int access)
+	{
+		for (int index = 0; index < 4; ++index)
+		{
+			int result = context.openDMA(index, access);
+			if (result != -1)
+				return result;
+			if (errno != EBUSY)
+				throw IOException();
+		}
+		throw IOException(ENODEV);
+	}
+
 	~Stress()
 	{
 		for (StressNodeList::iterator it = nodes.begin();
@@ -211,6 +224,46 @@ TEST(Stress, a_from_cpu)
 		EQUAL(0u, node->error());
 	}
 }
+
+TEST(Stress, d_dma_to_logic)
+{
+	CHECK(nodes.size() != 0);
+	dyplo::HardwareFifo from_cpu(openAvailableDMA(O_WRONLY|O_APPEND));
+	for (StressNodeList::iterator it = nodes.begin(); it != nodes.end(); ++it)
+	{
+		StressNode* node = *it;
+		control.routeDelete(node->id);
+		node->reset();
+		from_cpu.addRouteTo(node->id);
+		node->reset_lane(0);
+		node->set_lane_params(0, StressNodeLane(0));
+		node->enable(1);
+		node->start(1);
+
+		unsigned int dmaBufferSize = from_cpu.getDataTreshold() >> 1;
+		/* Expect a sensible size, even 1k is rediculously small, but still
+		 * bigger than what the (non-DMA) CPU node would support */
+		CHECK(dmaBufferSize > 1024);
+		unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+		std::vector<unsigned int> data(dmaBufferSizeWords);
+		unsigned int value = 0;
+		for (unsigned int repeat = 16; repeat != 0; --repeat)
+		{
+			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			{
+				data[i] = value;
+				++value;
+			}
+			EQUAL(dmaBufferSize, from_cpu.write(&data[0], dmaBufferSize));
+			EQUAL(0u, node->error());
+		}
+		// Clumsy way to flush the data, just sleep a second...
+		sleep(1);
+		node->enable(0);
+		EQUAL(0u, node->error());
+	}
+}
+
 
 TEST(Stress, b_loop_to_self_single)
 {
