@@ -264,6 +264,49 @@ TEST(Stress, d_dma_to_logic)
 	}
 }
 
+TEST(Stress, d_dma_from_logic)
+{
+	CHECK(nodes.size() != 0);
+	dyplo::HardwareFifo to_cpu(openAvailableDMA(O_RDONLY));
+	for (StressNodeList::iterator it = nodes.begin();	it != nodes.end(); ++it)
+	{
+		StressNode* node = *it;
+		control.routeDelete(node->id);
+		node->reset();
+		to_cpu.reset(); /* Clear FIFO */
+		to_cpu.addRouteFrom(node->id);
+		CHECK(! to_cpu.poll_for_incoming_data(0) );
+		node->reset_lane(0);
+		node->set_lane_params(0, StressNodeLane(0));
+		node->enable(1);
+		node->start(1);
+		unsigned int dmaBufferSize = to_cpu.getDataTreshold() >> 1;
+		/* Expect a sensible size, even 1k is rediculously small, but still
+		 * bigger than what the (non-DMA) CPU node would support */
+		CHECK(dmaBufferSize > 1024);
+		unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+		std::vector<unsigned int> data(dmaBufferSizeWords);
+		unsigned int value = 0;
+		for (unsigned int repeat = 16; repeat != 0; --repeat)
+		{
+			EQUAL(dmaBufferSize, to_cpu.read(&data[0], dmaBufferSize));
+			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			{
+				if (data[i] != value)
+				{
+					std::ostringstream msg;
+					msg << "Node " << (it - nodes.begin())
+						<< " expected=" << value << " data=" << data[i] << " " << data[i+1]; 
+					FAIL(msg.str());
+				}
+				++value;
+			}
+		}
+		node->enable(0);
+		to_cpu.reset(); /* Clear FIFO for future tests */
+	}
+}
+
 
 TEST(Stress, b_loop_to_self_single)
 {

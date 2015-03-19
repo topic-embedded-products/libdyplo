@@ -40,6 +40,37 @@
 #define YAFFUT_MAIN
 #include "yaffut.h"
 
+#include <time.h>
+
+class Stopwatch
+{
+public:
+	struct timespec m_start;
+	struct timespec m_stop;
+
+	Stopwatch()
+	{
+		clock_gettime(CLOCK_MONOTONIC, &m_start);
+	}
+
+	void start()
+	{
+		clock_gettime(CLOCK_MONOTONIC, &m_start);
+	}
+
+	void stop()
+	{
+		clock_gettime(CLOCK_MONOTONIC, &m_stop);
+	}
+
+	unsigned int elapsed_us()
+	{
+		return
+			((m_stop.tv_sec - m_start.tv_sec) * 1000000) +
+				(m_stop.tv_nsec - m_start.tv_nsec) / 1000;
+	}
+};
+
 /* Define "eternity" as a 5 second wait */
 #define VERY_LONG_TIMEOUT_US	5000000
 
@@ -1418,6 +1449,359 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 		CHECK(!dma0r.poll_for_incoming_data(0));
 	}
 }
+
+TEST(hardware_driver_ctx, p_dma_reset)
+{
+	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
+	{
+		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
+		dyplo::HardwareFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+		unsigned int dmaBufferSize = dma0w.getDataTreshold();
+		unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+		unsigned int seed = 0;
+		std::vector<unsigned int> testdata(dmaBufferSizeWords);
+		std::vector<unsigned int> testresult(dmaBufferSizeWords);
+		/* No data yet, so read will block and write won't */
+		CHECK(!dma0r.poll_for_incoming_data(0));
+		CHECK(dma0w.poll_for_outgoing_data(0));
+		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+			testdata[i] = seed + i;
+		/* Send some data through the pipe */
+		EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
+		CHECK(dma0r.poll_for_incoming_data(1));
+		size_t bytes = dma0r.read(&testresult[0], dmaBufferSize);
+		unsigned int words = bytes / sizeof(int);
+		CHECK(bytes);
+		for (unsigned int i = 0; i < words; ++i)
+			EQUAL(seed + i, testresult[i]);
+		/* Cannot change treshold because DMA is "primed" */
+		ASSERT_THROW(dma0r.setDataTreshold(4096), dyplo::IOException);
+		/* Reset the DMA controller to be able to change the value */
+		dma0r.reset();
+		const unsigned int thd = 4096;
+		dma0r.setDataTreshold(thd);
+		/* Check if the new treshold works by transferring one block */
+		CHECK(!dma0r.poll_for_incoming_data(0));
+		EQUAL(thd, dma0w.write(&testdata[0], thd));
+		CHECK(dma0r.poll_for_incoming_data(1));
+		bytes = dma0r.read(&testresult[0], thd);
+		words = bytes / sizeof(int);
+		CHECK(bytes);
+		for (unsigned int i = 0; i < words; ++i)
+			EQUAL(seed + i, testresult[i]);
+		/* Change it back to the default */
+		dma0r.reset();
+		dma0r.setDataTreshold(64*1024);
+		dma0w.reset();
+		CHECK(!dma0r.poll_for_incoming_data(0));
+
+		EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
+		CHECK(dma0r.poll_for_incoming_data(1));
+		bytes = dma0r.read(&testresult[0], dmaBufferSize);
+		EQUAL(dmaBufferSize, bytes);
+	}
+}
+
+TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
+{
+	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
+	{
+		static const unsigned int blocksize = 64 * 1024;
+		static const unsigned int num_blocks = 8;
+		
+		unsigned int dummy_data;
+
+		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
+		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+		EQUAL(num_blocks, dma0w.count());
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			const dyplo::HardwareDMAFifo::Block *block = dma0w.at(i);
+			EQUAL(i, block->id);
+			EQUAL(blocksize, block->size);
+			EQUAL(i * blocksize, block->offset);
+			CHECK(block->data != NULL);
+		}
+		
+		/* Once in block transfer mode, "write" fails */
+		ASSERT_THROW(dma0w.write(&dummy_data, sizeof(dummy_data)), dyplo::IOException);
+
+		/* Now for the receiving part */
+		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+		EQUAL(num_blocks, dma0r.count());
+		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			const dyplo::HardwareDMAFifo::Block *block = dma0w.at(i);
+			EQUAL(i, block->id);
+			EQUAL(blocksize, block->size);
+			EQUAL(i * blocksize, block->offset);
+			CHECK(block->data != NULL);
+		}
+
+		/* Once in block transfer mode, "read" fails */
+		ASSERT_THROW(dma0r.read(&dummy_data, sizeof(dummy_data)), dyplo::IOException);
+
+		/* Prime the reader with empty blocks*/
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
+			CHECK(block != NULL);
+			EQUAL(0, block->bytes_used);
+			EQUAL(blocksize, block->size);
+			dma0r.enqueue(block);
+			CHECK(block->state);
+		}
+		/* Send data... */
+		unsigned int write_seed = 0;
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			dyplo::HardwareDMAFifo::Block *block = dma0w.dequeue();
+			CHECK(block != NULL);
+			EQUAL(blocksize, block->size);
+			unsigned int num_words = block->size / sizeof(unsigned int);
+			unsigned int* data = (unsigned int*)block->data;
+			for (unsigned int j = 0; j < num_words; ++j)
+				data[j] = write_seed++;
+			block->bytes_used = num_words * sizeof(unsigned int);
+			dma0w.enqueue(block);
+			CHECK(block->state);
+		}
+		/* Read back the data */
+		unsigned int read_seed = 0;
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
+			CHECK(block != NULL);
+			CHECK(!block->state);
+			EQUAL(blocksize, block->bytes_used);
+			EQUAL(blocksize, block->size);
+			unsigned int num_words = block->size / sizeof(unsigned int);
+			unsigned int* data = (unsigned int*)block->data;
+			for (unsigned int j = 0; j < num_words; ++j)
+			{
+				EQUAL(read_seed, data[j]);
+				++read_seed;
+			}
+			dma0r.enqueue(block);
+			CHECK(block->state);
+		}
+		/* Go for another round, this time quicker submission */
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			dyplo::HardwareDMAFifo::Block *block = dma0w.dequeue();
+			CHECK(block != NULL);
+			CHECK(!block->state);
+			/* content size is untouched */
+			EQUAL(blocksize, block->bytes_used);
+			dma0w.enqueue(block);
+			CHECK(block->state);
+		}
+		/* Read back and check only the first word. This will trigger
+		 * blocking and IRQ handling. */
+		read_seed = 0;
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
+			CHECK(block != NULL);
+			EQUAL(blocksize, block->bytes_used);
+			unsigned int num_words = block->size / sizeof(unsigned int);
+			unsigned int* data = (unsigned int*)block->data;
+			EQUAL(read_seed, data[0]);
+			read_seed += num_words;
+		}
+	}
+}
+
+TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
+{
+	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
+	{
+		static const unsigned int blocksize = 1024 * 1024;
+		static const unsigned int num_blocks = 2;
+
+		dyplo::HardwareDMAFifo::Block *block;
+
+		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
+		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+		EQUAL(num_blocks, dma0w.count());
+		EQUAL(0, dyplo::set_non_blocking(dma0w));
+		/* Now for the receiving part */
+		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+		EQUAL(num_blocks, dma0r.count());
+		EQUAL(0, dyplo::set_non_blocking(dma0r));
+		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+		/* Prime the reader */
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			block = dma0r.dequeue();
+			CHECK(block != NULL);
+			EQUAL(0, block->bytes_used);
+			EQUAL(blocksize, block->size);
+			dma0r.enqueue(block);
+			CHECK(block->state);
+		}
+		/* Check blocking behaviour */
+		block = dma0r.dequeue();
+		CHECK(block == NULL);
+		CHECK(!dma0r.poll_for_incoming_data(0));
+		/* Send data */
+		for (unsigned int i = 0 ; i < num_blocks; ++i)
+		{
+			CHECK(dma0w.poll_for_outgoing_data(0)); /* Still room */
+			block = dma0w.dequeue();
+			block->bytes_used = block->size;
+			dma0w.enqueue(block);
+		}
+		/* Transfer in progress, so the incoming queue should become
+		 * unblocked now. We can't say anything about the outgoing queue */
+		for (unsigned int i = 0 ; i < num_blocks; ++i)
+		{
+			CHECK(dma0r.poll_for_incoming_data(1));
+			block = dma0r.dequeue();
+			CHECK(block != NULL);
+			dma0r.enqueue(block);
+		}
+		CHECK(!dma0r.poll_for_incoming_data(0));
+		/* Stuff both queues */
+		for (unsigned int i = 0 ; i < 2 * num_blocks; ++i)
+		{
+			CHECK(dma0w.poll_for_outgoing_data(1)); /* Wait for room */
+			block = dma0w.dequeue();
+			block->bytes_used = block->size;
+			dma0w.enqueue(block);
+		}
+		/* Now the write queue must be blocked */
+		CHECK(!dma0w.poll_for_outgoing_data(0));
+		for (unsigned int i = 0 ; i < 2 * num_blocks; ++i)
+		{
+			CHECK(dma0r.poll_for_incoming_data(1));
+			block = dma0r.dequeue();
+			CHECK(block != NULL);
+			dma0r.enqueue(block);
+		}
+	}
+}
+
+TEST(hardware_driver_ctx, p_dma_zerocopy_3benchmark)
+{
+	static const int dma_index = 0;
+	static const unsigned int blocksize = 1024 * 1024;
+	static const unsigned int num_blocks = 2;
+	dyplo::HardwareDMAFifo::Block *block;
+	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+	EQUAL(num_blocks, dma0r.count());
+	/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
+	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+	EQUAL(num_blocks, dma0w.count());
+	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+	/* Prime the reader */
+	for (unsigned int i = 0; i < num_blocks; ++i)
+	{
+		block = dma0r.dequeue();
+		EQUAL(blocksize, block->size);
+		dma0r.enqueue(block);
+	}
+	Stopwatch timer;
+	timer.start();
+	/* Send data */
+	for (unsigned int i = 0 ; i < num_blocks; ++i)
+	{
+		block = dma0w.dequeue();
+		block->bytes_used = block->size;
+		dma0w.enqueue(block);
+	}
+	unsigned int total_received = 0;
+	for (unsigned int i = 0; i < 100; ++i)
+	{
+		block = dma0w.dequeue();
+		block->bytes_used = block->size;
+		dma0w.enqueue(block);
+		block = dma0r.dequeue();
+		total_received += block->bytes_used;
+		dma0r.enqueue(block);
+	}
+	for (unsigned int i = 0 ; i < num_blocks; ++i)
+	{
+		block = dma0r.dequeue();
+		total_received += block->bytes_used;
+	}
+	timer.stop();
+	std::cout << " (" << (total_received/timer.elapsed_us())	<< " MB/s)" << std::flush;
+}
+
+TEST(hardware_driver_ctx, p_dma_zerocopy_4usersignals)
+{
+	static const int dma_index = 0;
+	static const unsigned int blocksize = 4 * 1024;
+	static const unsigned int num_blocks = 4;
+	dyplo::HardwareDMAFifo::Block *block;
+	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+	EQUAL(num_blocks, dma0r.count());
+	/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
+	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+	EQUAL(num_blocks, dma0w.count());
+	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+	/* Prime the reader */
+	for (unsigned int i = 0; i < num_blocks; ++i)
+	{
+		block = dma0r.dequeue();
+		EQUAL(blocksize, block->size);
+		dma0r.enqueue(block);
+	}
+
+	/* Send data */
+	for (unsigned int i = 0 ; i < num_blocks; ++i)
+	{
+		block = dma0w.dequeue();
+		unsigned int short_blocksize = (i + 1) * 256;
+		block->bytes_used = short_blocksize;
+		unsigned int* data = (unsigned int*)block->data;
+		for (unsigned int j = 0; j < short_blocksize / sizeof(unsigned int); ++j)
+			data[j] = (i << 24) | j;
+		block->user_signal = i;
+		dma0w.enqueue(block);
+	}
+	/* Send an extra full size block to flush the last one out */
+	{
+		block = dma0w.dequeue();
+		block->bytes_used = block->size;
+		unsigned int* data = (unsigned int*)block->data;
+		for (unsigned int j = 0; j < block->size / sizeof(unsigned int); ++j)
+			data[j] = 0xFF000000 | j;
+		block->user_signal = 0;
+		dma0w.enqueue(block);
+	}
+
+	/* Receive data */
+	for (unsigned int i = 0 ; i < num_blocks; ++i)
+	{
+		CHECK(dma0r.poll_for_incoming_data(1));
+		block = dma0r.dequeue();
+		unsigned int short_blocksize = (i + 1) * 256;
+		EQUAL(short_blocksize, block->bytes_used);
+		const unsigned int* data = (const unsigned int*)block->data;
+		for (unsigned int j = 0; j < short_blocksize / sizeof(unsigned int); ++j)
+			EQUAL((i << 24) | j, data[j]);
+		EQUAL(i, block->user_signal);
+		dma0r.enqueue(block); /* Give it back to the driver */
+	}
+	/* Receive the last block */
+	{
+		CHECK(dma0r.poll_for_incoming_data(10));
+		block = dma0r.dequeue();
+		EQUAL(block->size, block->bytes_used);
+		const unsigned int* data = (const unsigned int*)block->data;
+		for (unsigned int j = 0; j < block->bytes_used / sizeof(unsigned int); ++j)
+			EQUAL(0xFF000000 | j, data[j]);
+		EQUAL(0, block->user_signal);
+	}
+}
+
 
 TEST(hardware_driver_ctx, q_fifo_usersignal)
 {

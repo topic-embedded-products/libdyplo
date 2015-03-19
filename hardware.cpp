@@ -30,6 +30,7 @@
 #include "hardware.hpp"
 #include "directoryio.hpp"
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <errno.h>
 #include <sstream>
 #include <vector>
@@ -56,6 +57,13 @@ struct dyplo_route_t  {
 	unsigned int n_routes;
 	struct dyplo_route_item_t* proutes;
 };
+
+struct dyplo_buffer_block_alloc_req {
+	uint32_t size;	/* Size of each buffer (must be cache aligned) */
+	uint32_t count;	/* Number of buffers */
+};
+
+
 #define DYPLO_IOC_MAGIC	'd'
 #define DYPLO_IOC_ROUTE_CLEAR	0x00
 #define DYPLO_IOC_ROUTE_SET	0x01
@@ -74,6 +82,11 @@ struct dyplo_route_t  {
 #define DYPLO_IOC_TRESHOLD_TELL	0x11
 #define DYPLO_IOC_USERSIGNAL_QUERY	0x12
 #define DYPLO_IOC_USERSIGNAL_TELL	0x13
+#define DYPLO_IOC_DMABLOCK_ALLOC	0x20
+#define DYPLO_IOC_DMABLOCK_FREE 	0x21
+#define DYPLO_IOC_DMABLOCK_QUERY	0x22
+#define DYPLO_IOC_DMABLOCK_ENQUEUE	0x23
+#define DYPLO_IOC_DMABLOCK_DEQUEUE	0x24
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -115,7 +128,13 @@ struct dyplo_route_t  {
  * that aren't part of the actual data, but control the flow. */
 #define DYPLO_IOCQUSERSIGNAL   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_USERSIGNAL_QUERY)
 #define DYPLO_IOCTUSERSIGNAL   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_USERSIGNAL_TELL)
-}
+}/* Dyplo's IIO-alike DMA block interface */
+#define DYPLO_IOCDMABLOCK_ALLOC	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_ALLOC, struct dyplo_buffer_block_alloc_req)
+#define DYPLO_IOCDMABLOCK_FREE 	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_FREE)
+#define DYPLO_IOCDMABLOCK_QUERY	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_QUERY, HardwareDMAFifo::InternalBlock)
+#define DYPLO_IOCDMABLOCK_ENQUEUE	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_ENQUEUE, HardwareDMAFifo::InternalBlock)
+#define DYPLO_IOCDMABLOCK_DEQUEUE	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_DEQUEUE, HardwareDMAFifo::InternalBlock)
+
 
 namespace dyplo
 {
@@ -445,7 +464,7 @@ namespace dyplo
 		{
 			while ( getline (license_file,line) )
 			{
-				if (line.find("DYPLO_DNA") != -1 )
+				if (line.find("DYPLO_DNA") != std::string::npos )
 				{
 					int equal_pos = line.find("=");
 					std::string value = line.substr(equal_pos + 1);
@@ -576,6 +595,13 @@ namespace dyplo
 		return (unsigned int)result;
 	}
 
+	void HardwareFifo::setDataTreshold(unsigned int value)
+	{
+		int result = ::ioctl(handle, DYPLO_IOCTTRESHOLD, value);
+		if (result < 0)
+			throw IOException(__func__);
+	}
+
 	void HardwareFifo::setUserSignal(int usersignal)
 	{
 		int result = ::ioctl(handle, DYPLO_IOCTUSERSIGNAL, usersignal);
@@ -589,5 +615,87 @@ namespace dyplo
 		if (result < 0)
 			throw IOException(__func__);
 		return (unsigned int)result;
+	}
+
+	HardwareDMAFifo::HardwareDMAFifo(int file_descriptor, unsigned int size, unsigned int count, bool readonly):
+		HardwareFifo(file_descriptor)
+	{
+		struct dyplo_buffer_block_alloc_req req;
+		const int prot = readonly ? PROT_READ : (PROT_READ | PROT_WRITE);
+		
+		req.size = size;
+		req.count = count;
+		int result = ::ioctl(handle, DYPLO_IOCDMABLOCK_ALLOC, &req);
+		if (result < 0)
+			throw IOException(__func__);
+		blocks.resize(req.count);
+		blocks_head = blocks.begin();
+		for (unsigned int i = 0; i < req.count; ++i)
+		{
+			blocks[i].id = i;
+			blocks[i].data = NULL;
+		}
+		try
+		{
+			for (unsigned int i = 0; i < req.count; ++i)
+			{
+				result = ::ioctl(handle, DYPLO_IOCDMABLOCK_QUERY, &blocks[i]);
+				if (result < 0)
+					throw IOException("DYPLO_IOCDMABLOCK_QUERY");
+				void* map = ::mmap(NULL, blocks[i].size, prot, MAP_SHARED, handle, blocks[i].offset);
+				if (map == MAP_FAILED)
+					throw IOException("mmap");
+				blocks[i].data = map;
+			}
+		}
+		catch (const std::exception&)
+		{
+			dispose();
+			throw;
+		}
+	}
+
+	HardwareDMAFifo::~HardwareDMAFifo()
+	{
+		dispose();
+	}
+	
+	void HardwareDMAFifo::dispose()
+	{
+		for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
+		{
+			if (it->data)
+			{
+				::munmap(it->data, it->size);
+				it->data = NULL;
+			}
+		}
+		::ioctl(handle, DYPLO_IOCDMABLOCK_FREE);
+	}
+
+	HardwareDMAFifo::Block* HardwareDMAFifo::dequeue()
+	{
+		Block* result = &(*blocks_head);
+		if (result->state) /* Non-zero state indicates "driver" owns it */
+		{
+			int status = ::ioctl(handle, DYPLO_IOCDMABLOCK_DEQUEUE, result);
+			if (status < 0) {
+				if (errno == EAGAIN)
+					return NULL;
+				throw IOException("DYPLO_IOCDMABLOCK_DEQUEUE");
+			}
+		}
+		++blocks_head;
+		if (blocks_head == blocks.end())
+			blocks_head = blocks.begin();
+		return result;
+	}
+
+	void HardwareDMAFifo::enqueue(HardwareDMAFifo::Block* block)
+	{
+		int status = ::ioctl(handle, DYPLO_IOCDMABLOCK_ENQUEUE, block);
+		if (status < 0) {
+			throw IOException("DYPLO_IOCDMABLOCK_ENQUEUE");
+		}
 	}
 }

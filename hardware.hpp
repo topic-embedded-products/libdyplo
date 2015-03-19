@@ -28,7 +28,9 @@
  */
 #pragma once
 
+#include <stdint.h>
 #include <string>
+#include <vector>
 #include "fileio.hpp"
 
 namespace dyplo
@@ -124,7 +126,51 @@ namespace dyplo
 		void addRouteTo(int destination);
 		void addRouteFrom(int source);
 		unsigned int getDataTreshold();
+		void setDataTreshold(unsigned int value);
 		void setUserSignal(int usersignal);
 		int getUserSignal();
+	};
+
+	class HardwareDMAFifo: public HardwareFifo
+	{
+	public:
+		/* This struct matches what the driver uses in its ioctl */
+		struct InternalBlock
+		{
+			uint32_t id;	/* 0-based index of the buffer */
+			uint32_t offset;	/* Location of data in memory map */
+			uint32_t size;	/* Size of buffer */
+			uint32_t bytes_used; /* How much actually is in use */
+			uint16_t user_signal; /* User signals (framing) either way */
+			uint16_t state; /* Who's owner of the buffer */
+		};
+		struct Block: public InternalBlock
+		{
+			void* data; /* Points to memory-mapped DMA buffer */
+		};
+		/* Allocates "count" buffers of "size" bytes each. Size will be
+		 * rounded up to page size by the driver, count will max at 8 */
+		HardwareDMAFifo(int file_descriptor, unsigned int size, unsigned int count, bool readonly);
+		~HardwareDMAFifo();
+		
+		/* Explicitly dispose of allocated DMA buffers. Also called from
+		 * destructor */
+		void dispose();
+		
+		/* Get a block from the queue. In non-blocking mode, returns
+		 * NULL when it would block. When writing, this is the first
+		 * thing to do. */
+		Block* dequeue();
+		/* Send block to device. The block should have been obtained
+		 * using dequeue. Does not block. */
+		void enqueue(Block* block);
+
+		/* For test and diagnostic */
+		unsigned int count() const { return blocks.size(); }
+		const Block* at(uint32_t id) const { return &blocks[id]; }
+
+	protected:
+		std::vector<Block> blocks;
+		std::vector<Block>::iterator blocks_head;
 	};
 }
