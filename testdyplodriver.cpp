@@ -221,28 +221,6 @@ TEST(hardware_driver_ctx, d_io_control_route_cfg)
 	}
 }
 
-TEST(hardware_driver_ctx, d_io_control_route_fifo)
-{
-	/* Each config node must know its own ID */
-	for (int i = 0; i < 32; ++i)
-	{
-		int fd = context.openFifo(i, O_RDONLY);
-		if (fd >= 0)
-		{
-			dyplo::HardwareFifo fifo(fd);
-			int index = fifo.getNodeAndFifoIndex();
-			EQUAL(i, index >> 8);
-		}
-		fd = context.openFifo(i, O_WRONLY|O_APPEND);
-		if (fd >= 0)
-		{
-			dyplo::HardwareFifo fifo(fd);
-			int index = fifo.getNodeAndFifoIndex();
-			EQUAL(i, index >> 8);
-		}
-	}
-}
-
 TEST(hardware_driver_ctx, d_io_control_route_cpu)
 {
 	dyplo::HardwareControl::Route routes[64];
@@ -868,42 +846,38 @@ TEST(hardware_driver, h_irq_driven_write)
 	check_all_input_fifos_are_empty();
 }
 
-TEST(hardware_driver, i_cpu_block_crossbar)
+TEST(hardware_driver_ctx, i_cpu_block_crossbar)
 {
 	/* Set up weird routing */
 	const int nr_read_fifos = get_dyplo_cpu_fifo_count_r();
 	const int nr_write_fifos = get_dyplo_cpu_fifo_count_w();
 	/* Check that there are enough resources */
-	CHECK(nr_read_fifos >= 4);
-	CHECK(nr_write_fifos >= 4);
-	const dyplo::HardwareControl::Route routes[] = {
-		{0, 0, (unsigned char)(nr_read_fifos/2), 0},
-		{(unsigned char)(nr_write_fifos/2), 0, 1, 0},
-		{(unsigned char)(nr_write_fifos/2 + 1), 0, (unsigned char)(nr_read_fifos-1), 0},
-		{(unsigned char)(nr_write_fifos-1), 0, (unsigned char)(nr_read_fifos/2+1), 0},
-	};
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl(ctrl).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	CHECK(nr_read_fifos >= 2);
+	CHECK(nr_write_fifos >= 2);
 	int data[] = {0x12345678, (int)0xDEADBEEF};
 	const size_t data_size = sizeof(data)/sizeof(data[0]);
-	for (unsigned int i = 0; i < sizeof(routes)/sizeof(routes[0]); ++i)
+	for (int write_index = 0; write_index < nr_write_fifos; ++write_index)
 	{
-		int src = routes[i].srcFifo;
-		int dst = routes[i].dstFifo;
-		File f_src(ctrl.openFifo(src, O_WRONLY|O_APPEND));
-		File f_dst(ctrl.openFifo(dst, O_RDONLY));
-		ssize_t bytes_written = f_src.write(data, sizeof(data));
-		EQUAL((ssize_t)sizeof(data), bytes_written);
-		if (!f_dst.poll_for_incoming_data(2)) {
-			std::ostringstream msg;
-			msg << "Routing " << src << " -> " << dst << " didn't work, no data received";
-			FAIL(msg.str());
+		dyplo::HardwareFifo f_src(context.openFifo(write_index, O_WRONLY|O_APPEND));
+		int src_node_fifo = f_src.getNodeAndFifoIndex();
+		for (int read_index = 0; read_index < nr_read_fifos; ++read_index)
+		{
+			dyplo::HardwareFifo f_dst(context.openFifo(read_index, O_RDONLY));
+			f_dst.addRouteFrom(src_node_fifo);
+			ssize_t bytes_written = f_src.write(data, sizeof(data));
+			EQUAL((ssize_t)sizeof(data), bytes_written);
+			if (!f_dst.poll_for_incoming_data(2)) {
+				std::ostringstream msg;
+				msg << "Routing " << write_index << " -> " << read_index << " didn't work, no data received\n";
+				msg << std::hex << " src=" << src_node_fifo << " dst=" << f_dst.getNodeAndFifoIndex();
+				FAIL(msg.str());
+			}
+			int buffer[data_size];
+			ssize_t bytes_read = f_dst.read(buffer, sizeof(buffer));
+			EQUAL((ssize_t)sizeof(buffer), bytes_read);
+			for (unsigned int j = 0; j < data_size; ++j)
+				EQUAL(data[j], buffer[j]);
 		}
-		int buffer[data_size];
-		ssize_t bytes_read = f_dst.read(buffer, sizeof(buffer));
-		EQUAL((ssize_t)sizeof(buffer), bytes_read);
-		for (unsigned int j = 0; j < data_size; ++j)
-			EQUAL(data[j], buffer[j]);
 	}
 }
 
