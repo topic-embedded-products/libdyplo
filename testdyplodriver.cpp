@@ -1459,9 +1459,6 @@ TEST(hardware_driver_ctx, q_fifo_usersignal)
 
 TEST(hardware_driver_ctx, q_dma_usersignal)
 {
-	std::cout << " (disabled)";
-	return;
-
 	dyplo::HardwareFifo fifo1(context.openDMA(0, O_RDONLY));
 	//dyplo::HardwareFifo fifo2(context.openDMA(0, O_WRONLY|O_APPEND));
 	dyplo::HardwareFifo fifo2(context.openFifo(0, O_WRONLY|O_APPEND));
@@ -1489,14 +1486,24 @@ TEST(hardware_driver_ctx, q_dma_usersignal)
 	EQUAL(smallblock, fifo1.read(&result[0], blocksize));
 	EQUAL(data[0], result[0]);
 	EQUAL(data[smallblock / sizeof(int) - 1], result[smallblock / sizeof(int) - 1]);
+	/* DMA node returns usersignal of LAST transfer */
+	EQUAL(0, fifo1.getUserSignal());
 	EQUAL(1, fifo2.getUserSignal());
 
-	/* Flush it all out */
+	/* Send signal 2 and 0 in succession, and see if they come out
+	 * one by one */
 	fifo2.setUserSignal(2);
 	EQUAL(2, fifo2.getUserSignal());
+	EQUAL(smallblock, fifo2.write(&data[0], smallblock));
+	fifo2.setUserSignal(0);
 	EQUAL(blocksize, fifo2.write(&data[0], blocksize));
 	CHECK(fifo1.poll_for_incoming_data(1));
-	EQUAL(blocksize, fifo1.read(&result[0], blocksize));
+	EQUAL(smallblock, fifo1.read(&result[0], blocksize));
+	EQUAL(1, fifo1.getUserSignal());
+	EQUAL(smallblock, fifo1.read(&result[0], blocksize));
 	EQUAL(2, fifo1.getUserSignal());
 	EQUAL(data[0], result[0]);
+	CHECK(fifo1.poll_for_incoming_data(1));
+	EQUAL(blocksize, fifo1.read(&result[0], blocksize));
+	EQUAL(0, fifo1.getUserSignal());
 }
