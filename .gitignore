@@ -21,3 +21,5 @@ missing
 *.o
 /ar-lib
 /config.h.in
+compile
+test-driver
