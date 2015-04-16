@@ -1039,9 +1039,9 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 
 TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 {
-	/* For this test, a minimum of 4 input / output streams is needed */
-	CHECK(get_dyplo_cpu_fifo_count_w() >= 4);
-	CHECK(get_dyplo_cpu_fifo_count_r() >= 4);
+	/* For this test, a minimum of 2 input / output streams is needed */
+	CHECK(get_dyplo_cpu_fifo_count_w() >= 2);
+	CHECK(get_dyplo_cpu_fifo_count_r() >= 2);
 
 	static const int hdl_configuration_blob[] = {
 		1, 101, -1001, 10001
@@ -1052,8 +1052,10 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 	/* Set up route: Loop through the HDL blocks four times */
 	const unsigned char ADDER1 = adders[0];
 	const unsigned char ADDER2 = adders[1];
+	const unsigned char CPU_R = 1;
+	const unsigned char CPU_W = 1;
 	const dyplo::HardwareControl::Route routes[] = {
-		{0, ADDER1, 3, 0}, /* 0.3 -> 1.0 */
+		{0, ADDER1, CPU_W, 0}, /* 0.w -> 1.0 */
 		{0, ADDER2, 0, ADDER1}, /* 1.0 -> 2.0 */
 		{1, ADDER1, 0, ADDER2}, /* 2.0 -> 1.1 */
 		{1, ADDER2, 1, ADDER1}, /* 1.1 -> 2.1 */
@@ -1061,7 +1063,7 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 		{2, ADDER2, 2, ADDER1}, /* 1.2 -> 2.2 */
 		{3, ADDER1, 2, ADDER2}, /* 2.2 -> 1.3 */
 		{3, ADDER2, 3, ADDER1}, /* 1.3 -> 2.3 */
-		{1, 0, 3, ADDER2}, /* 2.3 -> 0.1 */
+		{CPU_R, 0, 3, ADDER2}, /* 2.3 -> 0.r */
 	};
 	dyplo::HardwareControl(context)
 		.routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
@@ -1079,15 +1081,15 @@ TEST(hardware_driver_hdl, k_hdl_block_ping_pong)
 			FAIL(ex.what());
 		}
 	}
-	run_hdl_test(context, 3, 1, total_effect);
+	run_hdl_test(context, CPU_W, CPU_R, total_effect);
 	check_all_input_fifos_are_empty();
 }
 
 TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 {
-	/* For this test, a minimum of 4 input / output streams is needed */
-	CHECK(get_dyplo_cpu_fifo_count_w() >= 4);
-	CHECK(get_dyplo_cpu_fifo_count_r() >= 4);
+	/* For this test, a minimum of 3 input / 1 output streams is needed */
+	CHECK(get_dyplo_cpu_fifo_count_w() >= 1);
+	CHECK(get_dyplo_cpu_fifo_count_r() >= 3);
 
 	static const int hdl_configuration_blob[] = {
 		7, -17, 1000001, 10001
@@ -1098,8 +1100,10 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 	/* Set up route: Loop through the HDL blocks four times */
 	const unsigned char ADDER1 = adders[0];
 	const unsigned char ADDER2 = adders[1];
+	const unsigned char CPU_R = 2;
+	const unsigned char CPU_W = 0;
 	const dyplo::HardwareControl::Route routes[] = {
-		{0, ADDER1, 0, 0}, /* 0.0 -> 1.0 */
+		{0, ADDER1, CPU_W, 0}, /* 0.w -> 1.0 */
 		{1, ADDER1, 0, ADDER1}, /* -> 1.1 */
 		{2, ADDER1, 1, ADDER1}, /* -> 1.2 */
 		{3, ADDER1, 2, ADDER1}, /* -> 1.3 */
@@ -1107,7 +1111,7 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 		{1, ADDER2, 0, ADDER2}, /* -> 2.1 */
 		{2, ADDER2, 1, ADDER2}, /* -> 2.2 */
 		{3, ADDER2, 2, ADDER2}, /* -> 2.3 */
-		{3, 0, 3, ADDER2}, /* 2.3 -> 0.3 */
+		{CPU_R, 0, 3, ADDER2}, /* 2.3 -> 0.r */
 	};
 	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
 	/* configure HDL block with coefficients */
@@ -1124,7 +1128,7 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 			FAIL(ex.what());
 		}
 	}
-	run_hdl_test(context, 0, 3, total_effect);
+	run_hdl_test(context, CPU_W, CPU_R, total_effect);
 	check_all_input_fifos_are_empty();
 }
 
