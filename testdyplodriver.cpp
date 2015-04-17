@@ -1556,6 +1556,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 			CHECK(block != NULL);
 			EQUAL(0, block->bytes_used);
 			EQUAL(blocksize, block->size);
+			block->bytes_used = block->size;
 			dma0r.enqueue(block);
 			CHECK(block->state);
 		}
@@ -1646,6 +1647,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 			CHECK(block != NULL);
 			EQUAL(0, block->bytes_used);
 			EQUAL(blocksize, block->size);
+			block->bytes_used = block->size;
 			dma0r.enqueue(block);
 			CHECK(block->state);
 		}
@@ -1668,6 +1670,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 			CHECK(dma0r.poll_for_incoming_data(1));
 			block = dma0r.dequeue();
 			CHECK(block != NULL);
+			block->bytes_used = block->size;
 			dma0r.enqueue(block);
 		}
 		CHECK(!dma0r.poll_for_incoming_data(0));
@@ -1686,6 +1689,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 			CHECK(dma0r.poll_for_incoming_data(1));
 			block = dma0r.dequeue();
 			CHECK(block != NULL);
+			block->bytes_used = block->size;
 			dma0r.enqueue(block);
 		}
 	}
@@ -1708,6 +1712,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_3benchmark)
 	{
 		block = dma0r.dequeue();
 		EQUAL(blocksize, block->size);
+		block->bytes_used = block->size;
 		dma0r.enqueue(block);
 	}
 	Stopwatch timer;
@@ -1727,6 +1732,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_3benchmark)
 		dma0w.enqueue(block);
 		block = dma0r.dequeue();
 		total_received += block->bytes_used;
+		block->bytes_used = block->size;
 		dma0r.enqueue(block);
 	}
 	for (unsigned int i = 0 ; i < num_blocks; ++i)
@@ -1755,6 +1761,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4usersignals)
 	{
 		block = dma0r.dequeue();
 		EQUAL(blocksize, block->size);
+		block->bytes_used = block->size;
 		dma0r.enqueue(block);
 	}
 
@@ -1792,6 +1799,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4usersignals)
 		for (unsigned int j = 0; j < short_blocksize / sizeof(unsigned int); ++j)
 			EQUAL((i << 24) | j, data[j]);
 		EQUAL(i, block->user_signal);
+		block->bytes_used = block->size;
 		dma0r.enqueue(block); /* Give it back to the driver */
 	}
 	/* Receive the last block */
