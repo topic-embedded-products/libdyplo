@@ -63,6 +63,25 @@ struct dyplo_buffer_block_alloc_req {
 	uint32_t count;	/* Number of buffers */
 };
 
+/* DMA not used for CPU-logic transfers at all, only for logic
+ * storage. Buffer can be mmap'ed for inspection. */
+#define DYPLO_DMA_MODE_STANDALONE	0
+/* (default) Copies data from userspace into a kernel buffer and
+ * vice versa. */
+#define DYPLO_DMA_MODE_RINGBUFFER_BOUNCE	1
+/* Blockwise data transfers, using coherent memory. This will result in
+ * slow non-cached memory being used when hardware coherency is not
+ * available, but it is the fastest mode. */
+#define DYPLO_DMA_MODE_BLOCK_COHERENT	2
+/* Blockwise data transfers, using  streaming DMA into cachable memory.
+ * Managing the cache may cost more than actually copying the data. */
+#define DYPLO_DMA_MODE_BLOCK_STREAMING	3
+
+struct dyplo_dma_configuration_req {
+	uint32_t mode;	/* One of DYPLO_DMA_MODE.. */
+	uint32_t size;	/* Size of each buffer (will be page aligned) */
+	uint32_t count;	/* Number of buffers */
+};
 
 #define DYPLO_IOC_MAGIC	'd'
 #define DYPLO_IOC_ROUTE_CLEAR	0x00
@@ -82,6 +101,7 @@ struct dyplo_buffer_block_alloc_req {
 #define DYPLO_IOC_TRESHOLD_TELL	0x11
 #define DYPLO_IOC_USERSIGNAL_QUERY	0x12
 #define DYPLO_IOC_USERSIGNAL_TELL	0x13
+#define DYPLO_IOC_DMA_RECONFIGURE	0x1F
 #define DYPLO_IOC_DMABLOCK_ALLOC	0x20
 #define DYPLO_IOC_DMABLOCK_FREE 	0x21
 #define DYPLO_IOC_DMABLOCK_QUERY	0x22
@@ -128,13 +148,15 @@ struct dyplo_buffer_block_alloc_req {
  * that aren't part of the actual data, but control the flow. */
 #define DYPLO_IOCQUSERSIGNAL   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_USERSIGNAL_QUERY)
 #define DYPLO_IOCTUSERSIGNAL   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_USERSIGNAL_TELL)
-}/* Dyplo's IIO-alike DMA block interface */
+/* DMA configuration */
+#define DYPLO_IOCDMA_RECONFIGURE _IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMA_RECONFIGURE, struct dyplo_dma_configuration_req)
+/* Dyplo's IIO-alike DMA block interface */
 #define DYPLO_IOCDMABLOCK_ALLOC	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_ALLOC, struct dyplo_buffer_block_alloc_req)
 #define DYPLO_IOCDMABLOCK_FREE 	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_FREE)
 #define DYPLO_IOCDMABLOCK_QUERY	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_QUERY, HardwareDMAFifo::InternalBlock)
 #define DYPLO_IOCDMABLOCK_ENQUEUE	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_ENQUEUE, HardwareDMAFifo::InternalBlock)
 #define DYPLO_IOCDMABLOCK_DEQUEUE	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_DEQUEUE, HardwareDMAFifo::InternalBlock)
-
+} /* extern "C" */
 
 namespace dyplo
 {
@@ -617,15 +639,20 @@ namespace dyplo
 		return (unsigned int)result;
 	}
 
-	HardwareDMAFifo::HardwareDMAFifo(int file_descriptor, unsigned int size, unsigned int count, bool readonly):
+	HardwareDMAFifo::HardwareDMAFifo(int file_descriptor):
 		HardwareFifo(file_descriptor)
 	{
-		struct dyplo_buffer_block_alloc_req req;
+	}
+
+	void HardwareDMAFifo::reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly)
+	{
+		struct dyplo_dma_configuration_req req;
 		const int prot = readonly ? PROT_READ : (PROT_READ | PROT_WRITE);
-		
+		unmap();
+		req.mode = mode;
 		req.size = size;
 		req.count = count;
-		int result = ::ioctl(handle, DYPLO_IOCDMABLOCK_ALLOC, &req);
+		int result = ::ioctl(handle, DYPLO_IOCDMA_RECONFIGURE, &req);
 		if (result < 0)
 			throw IOException(__func__);
 		blocks.resize(req.count);
@@ -662,14 +689,7 @@ namespace dyplo
 	
 	void HardwareDMAFifo::dispose()
 	{
-		for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
-		{
-			if (it->data)
-			{
-				::munmap(it->data, it->size);
-				it->data = NULL;
-			}
-		}
+		unmap();
 		::ioctl(handle, DYPLO_IOCDMABLOCK_FREE);
 	}
 
@@ -696,6 +716,18 @@ namespace dyplo
 		int status = ::ioctl(handle, DYPLO_IOCDMABLOCK_ENQUEUE, block);
 		if (status < 0) {
 			throw IOException("DYPLO_IOCDMABLOCK_ENQUEUE");
+		}
+	}
+	
+	void HardwareDMAFifo::unmap()
+	{
+		for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
+		{
+			if (it->data)
+			{
+				::munmap(it->data, it->size);
+				it->data = NULL;
+			}
 		}
 	}
 }

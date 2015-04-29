@@ -1511,6 +1511,10 @@ TEST(hardware_driver_ctx, p_dma_reset)
 TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	
+	for (unsigned int transfer_mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
+		transfer_mode <= dyplo::HardwareDMAFifo::MODE_STREAMING;
+		++transfer_mode)
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
 		static const unsigned int blocksize = 64 * 1024;
@@ -1519,7 +1523,8 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 		unsigned int dummy_data;
 
 		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
-		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
+		dma0w.reconfigure(transfer_mode, blocksize, num_blocks, false);
 		EQUAL(num_blocks, dma0w.count());
 		for (unsigned int i = 0; i < num_blocks; ++i)
 		{
@@ -1534,7 +1539,8 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 		ASSERT_THROW(dma0w.write(&dummy_data, sizeof(dummy_data)), dyplo::IOException);
 
 		/* Now for the receiving part */
-		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+		dma0r.reconfigure(transfer_mode, blocksize, num_blocks, true);
 		EQUAL(num_blocks, dma0r.count());
 		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
 		for (unsigned int i = 0; i < num_blocks; ++i)
@@ -1632,11 +1638,13 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 		dyplo::HardwareDMAFifo::Block *block;
 
 		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
-		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
+		dma0w.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, false);
 		EQUAL(num_blocks, dma0w.count());
 		EQUAL(0, dyplo::set_non_blocking(dma0w));
 		/* Now for the receiving part */
-		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+		dma0r.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, true);
 		EQUAL(num_blocks, dma0r.count());
 		EQUAL(0, dyplo::set_non_blocking(dma0r));
 		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
@@ -1701,10 +1709,12 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_3benchmark)
 	static const unsigned int blocksize = 1024 * 1024;
 	static const unsigned int num_blocks = 2;
 	dyplo::HardwareDMAFifo::Block *block;
-	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+	dma0r.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, true);
 	EQUAL(num_blocks, dma0r.count());
 	/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
-	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
+	dma0w.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, false);
 	EQUAL(num_blocks, dma0w.count());
 	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
 	/* Prime the reader */
@@ -1750,10 +1760,12 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4usersignals)
 	static const unsigned int blocksize = 4 * 1024;
 	static const unsigned int num_blocks = 4;
 	dyplo::HardwareDMAFifo::Block *block;
-	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY), blocksize, num_blocks, true);
+	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+	dma0r.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, true);
 	EQUAL(num_blocks, dma0r.count());
 	/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
-	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR), blocksize, num_blocks, false);
+	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
+	dma0w.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, false);
 	EQUAL(num_blocks, dma0w.count());
 	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
 	/* Prime the reader */

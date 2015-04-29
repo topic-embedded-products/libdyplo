@@ -148,11 +148,18 @@ namespace dyplo
 		{
 			void* data; /* Points to memory-mapped DMA buffer */
 		};
-		/* Allocates "count" buffers of "size" bytes each. Size will be
-		 * rounded up to page size by the driver, count will max at 8 */
-		HardwareDMAFifo(int file_descriptor, unsigned int size, unsigned int count, bool readonly);
+		HardwareDMAFifo(int file_descriptor);
 		~HardwareDMAFifo();
-		
+
+		enum {
+			MODE_COHERENT = 2,
+			MODE_STREAMING= 3,
+		};
+		/* Allocates "count" buffers of "size" bytes each. Size will be
+		 * rounded up to page size by the driver, count will max at 8.
+		 * Must be called before dequeue.
+		 * The readonly flag determines the memory map access. */
+		void reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly);
 		/* Explicitly dispose of allocated DMA buffers. Also called from
 		 * destructor */
 		void dispose();
@@ -170,6 +177,7 @@ namespace dyplo
 		const Block* at(uint32_t id) const { return &blocks[id]; }
 
 	protected:
+		void unmap();
 		std::vector<Block> blocks;
 		std::vector<Block>::iterator blocks_head;
 	};
