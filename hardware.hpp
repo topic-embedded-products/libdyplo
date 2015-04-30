@@ -152,6 +152,8 @@ namespace dyplo
 		~HardwareDMAFifo();
 
 		enum {
+			MODE_STANDALONE = 0,
+			MODE_RINGBUFFER = 1,
 			MODE_COHERENT = 2,
 			MODE_STREAMING= 3,
 		};
@@ -166,7 +168,8 @@ namespace dyplo
 		
 		/* Get a block from the queue. In non-blocking mode, returns
 		 * NULL when it would block. When writing, this is the first
-		 * thing to do. */
+		 * thing to do. Only valid for MODE_COHERENT and MODE_STREAMING
+		 * configurations. */
 		Block* dequeue();
 		/* Send block to device. The block should have been obtained
 		 * using dequeue. Does not block. */
@@ -177,6 +180,7 @@ namespace dyplo
 		const Block* at(uint32_t id) const { return &blocks[id]; }
 
 	protected:
+		void resize(unsigned int number_of_blocks, unsigned int blocksize);
 		void unmap();
 		std::vector<Block> blocks;
 		std::vector<Block>::iterator blocks_head;

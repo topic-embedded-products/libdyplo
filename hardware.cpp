@@ -644,6 +644,14 @@ namespace dyplo
 	{
 	}
 
+	static void* dma_map_single(int handle, int prot, off_t offset, size_t size)
+	{
+		void* map = ::mmap(NULL, size, prot, MAP_SHARED, handle, offset);
+		if (map == MAP_FAILED)
+			throw IOException("mmap");
+		return map;
+	}
+
 	void HardwareDMAFifo::reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly)
 	{
 		struct dyplo_dma_configuration_req req;
@@ -652,27 +660,31 @@ namespace dyplo
 		req.mode = mode;
 		req.size = size;
 		req.count = count;
-		int result = ::ioctl(handle, DYPLO_IOCDMA_RECONFIGURE, &req);
-		if (result < 0)
+		if (::ioctl(handle, DYPLO_IOCDMA_RECONFIGURE, &req) < 0)
 			throw IOException(__func__);
-		blocks.resize(req.count);
-		blocks_head = blocks.begin();
-		for (unsigned int i = 0; i < req.count; ++i)
-		{
-			blocks[i].id = i;
-			blocks[i].data = NULL;
-		}
+		resize(req.count, req.size);
 		try
 		{
-			for (unsigned int i = 0; i < req.count; ++i)
+			switch (mode)
 			{
-				result = ::ioctl(handle, DYPLO_IOCDMABLOCK_QUERY, &blocks[i]);
-				if (result < 0)
-					throw IOException("DYPLO_IOCDMABLOCK_QUERY");
-				void* map = ::mmap(NULL, blocks[i].size, prot, MAP_SHARED, handle, blocks[i].offset);
-				if (map == MAP_FAILED)
-					throw IOException("mmap");
-				blocks[i].data = map;
+				case MODE_STANDALONE:
+					for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
+					{
+						it->data = dma_map_single(handle, prot, it->offset, it->size);
+					}
+					break;
+				case MODE_RINGBUFFER:
+					/* This mode does not support memory mapping yet */
+					break;
+				case MODE_COHERENT:
+				case MODE_STREAMING:
+					for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
+					{
+						if (::ioctl(handle, DYPLO_IOCDMABLOCK_QUERY, &(*it)) < 0)
+							throw IOException("DYPLO_IOCDMABLOCK_QUERY");
+						it->data = dma_map_single(handle, prot, it->offset, it->size);
+					}
+					break;
 			}
 		}
 		catch (const std::exception&)
@@ -719,6 +731,21 @@ namespace dyplo
 		}
 	}
 	
+	void HardwareDMAFifo::resize(unsigned int number_of_blocks, unsigned int blocksize)
+	{
+		blocks.resize(number_of_blocks);
+		blocks_head = blocks.begin();
+		unsigned int offset = 0;
+		for (unsigned int i = 0; i < number_of_blocks; ++i)
+		{
+			blocks[i].id = i;
+			blocks[i].data = NULL;
+			blocks[i].size = blocksize;
+			blocks[i].offset = offset;
+			offset += blocksize;
+		}
+	}
+
 	void HardwareDMAFifo::unmap()
 	{
 		for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
