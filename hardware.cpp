@@ -107,6 +107,12 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_DMABLOCK_QUERY	0x22
 #define DYPLO_IOC_DMABLOCK_ENQUEUE	0x23
 #define DYPLO_IOC_DMABLOCK_DEQUEUE	0x24
+#define DYPLO_IOC_DMASTANDALONE_CONFIGURE_TO_LOGIC	0x28
+#define DYPLO_IOC_DMASTANDALONE_CONFIGURE_FROM_LOGIC	0x29
+#define DYPLO_IOC_DMASTANDALONE_START_TO_LOGIC	0x2A
+#define DYPLO_IOC_DMASTANDALONE_START_FROM_LOGIC	0x2B
+#define DYPLO_IOC_DMASTANDALONE_STOP_TO_LOGIC	0x2C
+#define DYPLO_IOC_DMASTANDALONE_STOP_FROM_LOGIC	0x2D
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -156,6 +162,15 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOCDMABLOCK_QUERY	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_QUERY, HardwareDMAFifo::InternalBlock)
 #define DYPLO_IOCDMABLOCK_ENQUEUE	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_ENQUEUE, HardwareDMAFifo::InternalBlock)
 #define DYPLO_IOCDMABLOCK_DEQUEUE	_IOWR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMABLOCK_DEQUEUE, HardwareDMAFifo::InternalBlock)
+/* Standalone DMA configuration and control */
+#define DYPLO_IOCSDMASTANDALONE_CONFIGURE_TO_LOGIC	_IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_CONFIGURE_TO_LOGIC, HardwareDMAFifo::StandaloneConfiguration)
+#define DYPLO_IOCGDMASTANDALONE_CONFIGURE_TO_LOGIC	_IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_CONFIGURE_TO_LOGIC, HardwareDMAFifo::StandaloneConfiguration)
+#define DYPLO_IOCSDMASTANDALONE_CONFIGURE_FROM_LOGIC	_IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_CONFIGURE_FROM_LOGIC, HardwareDMAFifo::StandaloneConfiguration)
+#define DYPLO_IOCGDMASTANDALONE_CONFIGURE_FROM_LOGIC	_IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_CONFIGURE_FROM_LOGIC, HardwareDMAFifo::StandaloneConfiguration)
+#define DYPLO_IOCDMASTANDALONE_START_TO_LOGIC   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_START_TO_LOGIC)
+#define DYPLO_IOCDMASTANDALONE_START_FROM_LOGIC   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_START_FROM_LOGIC)
+#define DYPLO_IOCDMASTANDALONE_STOP_TO_LOGIC  _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_STOP_TO_LOGIC)
+#define DYPLO_IOCDMASTANDALONE_STOP_FROM_LOGIC  _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_STOP_FROM_LOGIC)
 } /* extern "C" */
 
 namespace dyplo
@@ -668,10 +683,8 @@ namespace dyplo
 			switch (mode)
 			{
 				case MODE_STANDALONE:
-					for (std::vector<Block>::iterator it = blocks.begin(); it != blocks.end(); ++it)
-					{
-						it->data = dma_map_single(handle, prot, it->offset, it->size);
-					}
+					/* In standalone mode, it creates one big block of size*count bytes. */
+					/* We don't need to mmap it because it's for the FPGA only. */
 					break;
 				case MODE_RINGBUFFER:
 					/* This mode does not support memory mapping yet */
@@ -756,5 +769,34 @@ namespace dyplo
 				it->data = NULL;
 			}
 		}
+	}
+
+	void HardwareDMAFifo::standaloneStart(bool direction_from_logic)
+	{
+		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCDMASTANDALONE_START_FROM_LOGIC : DYPLO_IOCDMASTANDALONE_START_TO_LOGIC))
+			throw IOException(__func__);
+	}
+	void HardwareDMAFifo::standaloneStop(bool direction_from_logic)
+	{
+		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCDMASTANDALONE_STOP_FROM_LOGIC : DYPLO_IOCDMASTANDALONE_STOP_TO_LOGIC))
+			throw IOException(__func__);
+	}
+	void HardwareDMAFifo::setStandaloneConfig(
+		const  HardwareDMAFifo::StandaloneConfiguration *config, bool direction_from_logic)
+	{
+		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCSDMASTANDALONE_CONFIGURE_FROM_LOGIC : DYPLO_IOCSDMASTANDALONE_CONFIGURE_TO_LOGIC, config))
+			throw IOException(__func__);
+	}
+
+	void HardwareDMAFifo::getStandaloneConfig(
+		HardwareDMAFifo::StandaloneConfiguration *config, bool direction_from_logic)
+	{
+		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCGDMASTANDALONE_CONFIGURE_FROM_LOGIC : DYPLO_IOCGDMASTANDALONE_CONFIGURE_TO_LOGIC, config))
+			throw IOException(__func__);
+	}
+
+	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs)
+	{
+		return !memcmp(&lhs, &rhs, sizeof(lhs));
 	}
 }

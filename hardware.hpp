@@ -175,6 +175,23 @@ namespace dyplo
 		 * using dequeue. Does not block. */
 		void enqueue(Block* block);
 
+		void standaloneStart(bool direction_from_logic);
+		void standaloneStop(bool direction_from_logic);
+		/* This struct matches what the driver uses in its ioctl */
+		struct StandaloneConfiguration
+		{
+			uint32_t offset;
+			uint32_t burst_size;
+			uint32_t incr_a;
+			uint32_t iterations_a;
+			uint32_t incr_b;
+			uint32_t iterations_b;
+			uint32_t incr_c;
+			uint32_t iterations_c;
+
+		};
+		void setStandaloneConfig(const StandaloneConfiguration *config, bool direction_from_logic);
+		void getStandaloneConfig(StandaloneConfiguration *config, bool direction_from_logic);
 		/* For test and diagnostic */
 		unsigned int count() const { return blocks.size(); }
 		const Block* at(uint32_t id) const { return &blocks[id]; }
@@ -185,4 +202,9 @@ namespace dyplo
 		std::vector<Block> blocks;
 		std::vector<Block>::iterator blocks_head;
 	};
+
+	/* Define equality operators */
+	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs);
+	inline bool operator!=(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs) {return !(lhs == rhs);}
+
 }
