@@ -1703,55 +1703,86 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 	}
 }
 
+
+static const unsigned int benchmark_block_sizes[] = {
+	4096, 16384, 32*1024, 64*1024, 128*1024, 256*1024, 1024*1024,
+};
 TEST(hardware_driver_ctx, p_dma_zerocopy_3benchmark)
 {
 	static const int dma_index = 0;
-	static const unsigned int blocksize = 1024 * 1024;
-	static const unsigned int num_blocks = 2;
-	dyplo::HardwareDMAFifo::Block *block;
-	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
-	dma0r.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, true);
-	EQUAL(num_blocks, dma0r.count());
-	/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
-	dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
-	dma0w.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, false);
-	EQUAL(num_blocks, dma0w.count());
-	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
-	/* Prime the reader */
-	for (unsigned int i = 0; i < num_blocks; ++i)
+	for (unsigned int mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
+		mode <= dyplo::HardwareDMAFifo::MODE_STREAMING; ++mode)
 	{
-		block = dma0r.dequeue();
-		EQUAL(blocksize, block->size);
-		block->bytes_used = block->size;
-		dma0r.enqueue(block);
-	}
-	Stopwatch timer;
-	timer.start();
-	/* Send data */
-	for (unsigned int i = 0 ; i < num_blocks; ++i)
+		std::cout << "\nm:" << mode;
+	for (unsigned int blocksize_index = 0;
+		blocksize_index < sizeof(benchmark_block_sizes)/sizeof(benchmark_block_sizes[0]);
+		++blocksize_index)
 	{
-		block = dma0w.dequeue();
-		block->bytes_used = block->size;
-		dma0w.enqueue(block);
+		unsigned int blocksize = benchmark_block_sizes[blocksize_index];
+		static const unsigned int num_blocks = 2;
+		std::cout << ' ' << (blocksize>>10) << "k:";
+		dyplo::HardwareDMAFifo::Block *block;
+		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+		dma0r.reconfigure(mode, blocksize, num_blocks, true);
+		EQUAL(num_blocks, dma0r.count());
+		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
+		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
+		dma0w.reconfigure(mode, blocksize, num_blocks, false);
+		EQUAL(num_blocks, dma0w.count());
+		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+		/* Prime the reader */
+		unsigned int nonzero = 0;
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			block = dma0r.dequeue();
+			EQUAL(blocksize, block->size);
+			block->bytes_used = block->size;
+			/* Touch all memory to bring it into cache */
+			unsigned int* data = (unsigned int*)block->data;
+			for (int j = 0; j < block->size/sizeof(unsigned int); ++j)
+				if (data[j] != 0)
+					++nonzero;
+			dma0r.enqueue(block);
+		}
+		/* Bogus check to make sure that nonzero does not get optimized away */
+		CHECK(nonzero <= num_blocks*blocksize/sizeof(unsigned int));
+		/* Touch all memory to bring it into cache */
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			unsigned int* data = (unsigned int*)dma0w.at(i)->data;
+			for (int j = 0; j < blocksize/sizeof(unsigned int); ++j)
+				data[j] = (i << 24) | j;
+		}
+		Stopwatch timer;
+		timer.start();
+		/* Send data */
+		for (unsigned int i = 0 ; i < num_blocks; ++i)
+		{
+			block = dma0w.dequeue();
+			block->bytes_used = block->size;
+			dma0w.enqueue(block);
+		}
+		unsigned int total_received = 0;
+		for (unsigned int i = (100*1024*1024)/blocksize; i != 0; --i)
+		{
+			block = dma0w.dequeue();
+			block->bytes_used = block->size;
+			dma0w.enqueue(block);
+			block = dma0r.dequeue();
+			total_received += block->bytes_used;
+			block->bytes_used = block->size;
+			dma0r.enqueue(block);
+		}
+		for (unsigned int i = 0 ; i < num_blocks; ++i)
+		{
+			block = dma0r.dequeue();
+			total_received += block->bytes_used;
+		}
+		timer.stop();
+		std::cout << (total_received/timer.elapsed_us()) << std::flush;
 	}
-	unsigned int total_received = 0;
-	for (unsigned int i = 0; i < 100; ++i)
-	{
-		block = dma0w.dequeue();
-		block->bytes_used = block->size;
-		dma0w.enqueue(block);
-		block = dma0r.dequeue();
-		total_received += block->bytes_used;
-		block->bytes_used = block->size;
-		dma0r.enqueue(block);
 	}
-	for (unsigned int i = 0 ; i < num_blocks; ++i)
-	{
-		block = dma0r.dequeue();
-		total_received += block->bytes_used;
-	}
-	timer.stop();
-	std::cout << " (" << (total_received/timer.elapsed_us())	<< " MB/s)" << std::flush;
+	std::cout << " (MB/s) ";
 }
 
 TEST(hardware_driver_ctx, p_dma_zerocopy_4usersignals)
