@@ -1763,7 +1763,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_3benchmark)
 			dma0w.enqueue(block);
 		}
 		unsigned int total_received = 0;
-		for (unsigned int i = (100*1024*1024)/blocksize; i != 0; --i)
+		for (unsigned int i = (48*1024*1024)/blocksize; i != 0; --i)
 		{
 			block = dma0w.dequeue();
 			block->bytes_used = block->size;
@@ -1857,6 +1857,41 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4usersignals)
 	}
 }
 
+TEST(hardware_driver_ctx, q_dma_invalid_configuration)
+{
+	static const int dma_index = 0;
+	{
+		dyplo::HardwareDMAFifo dma0(context.openDMA(dma_index, O_RDONLY));
+		/* Invalid mode number should fail */
+		ASSERT_THROW(dma0.reconfigure(424242, 0, 0, true), dyplo::IOException);
+		/* Read-only node cannot be configured for standalone operation */
+		ASSERT_THROW(dma0.reconfigure(dyplo::HardwareDMAFifo::MODE_STANDALONE, 0, 0, true), dyplo::IOException);
+	}
+	{
+		dyplo::HardwareDMAFifo dma0(context.openDMA(dma_index, O_RDWR));
+		ASSERT_THROW(dma0.reconfigure(424242, 0, 0, true), dyplo::IOException);
+		/* Must open in exclusive mode for standalone operation */
+		ASSERT_THROW(dma0.reconfigure(dyplo::HardwareDMAFifo::MODE_STANDALONE, 0, 0, false), dyplo::IOException);
+	}
+}
+
+TEST(hardware_driver_ctx, q_dma_open_only_once)
+{
+	static const int dma_index = 0;
+	dyplo::File dma0r1(context.openDMA(dma_index, O_RDONLY));
+	/* Cannot open twice for reading */
+	ASSERT_THROW(dyplo::File dma0r2(context.openDMA(dma_index, O_RDONLY)), dyplo::IOException);
+	{
+		/* Can open for R/W mode which is actually write-only */
+		dyplo::File dma0w(context.openDMA(dma_index, O_RDWR));
+		/* But not twice */
+		ASSERT_THROW(
+			dyplo::File dma0r2(context.openDMA(dma_index, O_RDWR)), dyplo::IOException);
+	}
+	/* Still cannot open for reading (R/W flags properly handled in driver) */
+	ASSERT_THROW(dyplo::File dma0r3(context.openDMA(dma_index, O_RDONLY)), dyplo::IOException);
+	CHECK(dma0r1.handle != -1); /* Force lifetime of dma0r1 object */
+}
 
 TEST(hardware_driver_ctx, q_fifo_usersignal)
 {
