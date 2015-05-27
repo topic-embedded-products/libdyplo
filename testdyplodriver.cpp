@@ -1511,7 +1511,7 @@ TEST(hardware_driver_ctx, p_dma_reset)
 TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
-	
+
 	for (unsigned int transfer_mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
 		transfer_mode <= dyplo::HardwareDMAFifo::MODE_STREAMING;
 		++transfer_mode)
@@ -1519,7 +1519,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 	{
 		static const unsigned int blocksize = 64 * 1024;
 		static const unsigned int num_blocks = 8;
-		
+
 		unsigned int dummy_data;
 
 		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
@@ -1534,7 +1534,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 			EQUAL(i * blocksize, block->offset);
 			CHECK(block->data != NULL);
 		}
-		
+
 		/* Once in block transfer mode, "write" fails */
 		ASSERT_THROW(dma0w.write(&dummy_data, sizeof(dummy_data)), dyplo::IOException);
 
