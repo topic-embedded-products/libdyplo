@@ -224,21 +224,6 @@ TEST(hardware_driver, c_fifo_single_open_rw_access)
 	ASSERT_THROW(File w0r("/dev/dyplow0", O_RDONLY), dyplo::IOException);
 }
 
-static int connect_all_fifos_in_loop()
-{
-	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
-	dyplo::HardwareContext ctrl;
-	dyplo::HardwareControl::Route routes[dyplo_cpu_fifo_count];
-	for (int i = 0; i < dyplo_cpu_fifo_count; ++i) {
-		routes[i].srcNode = 0;
-		routes[i].srcFifo = i;
-		routes[i].dstNode = 0;
-		routes[i].dstFifo = i;
-	}
-	dyplo::HardwareControl(ctrl).routeAdd(routes, dyplo_cpu_fifo_count);
-	return dyplo_cpu_fifo_count;
-}
-
 TEST(hardware_driver_ctx, d_io_control_route_cfg)
 {
 	/* Each config node must know its own ID */
@@ -287,20 +272,9 @@ TEST(hardware_driver_ctx, d_io_control_route_cpu)
 	EQUAL(0, (int)routes[1].dstNode);
 	EQUAL(2, (int)routes[1].dstFifo);
 	ctrl.routeDeleteAll();
-	/* Setup loopback system (1->0, 1->1 etc) */
-	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
-	std::cout << " (" << dyplo_cpu_fifo_count << ")";
-	CHECK(dyplo_cpu_fifo_count > 0);
 	n_routes =
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
-	EQUAL(dyplo_cpu_fifo_count, n_routes);
-	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
-	{
-		EQUAL(0, routes[fifo].srcNode);
-		EQUAL(fifo, routes[fifo].srcFifo);
-		EQUAL(0, routes[fifo].dstNode);
-		EQUAL(fifo, routes[fifo].dstFifo);
-	}
+	EQUAL(0, n_routes);
 }
 
 TEST(hardware_driver_ctx, d_io_control_route_directly_fifo)
@@ -537,12 +511,12 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 
 TEST(hardware_driver, e_transmit_loop)
 {
-	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
 	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
 	{
-		File fifo_in(openFifo(fifo, O_RDONLY));
-		File fifo_out(openFifo(fifo, O_WRONLY));
-		/* Future todo: Set up routing... */
+		dyplo::HardwareFifo fifo_in(openFifo(fifo, O_RDONLY));
+		dyplo::HardwareFifo fifo_out(openFifo(fifo, O_WRONLY));
+		fifo_in.addRouteFrom(fifo_out.getNodeAndFifoIndex());
 		/* Assert that input is empty */
 		CHECK(! fifo_in.poll_for_incoming_data(0) );
 		int buffer[16];
@@ -611,8 +585,10 @@ ssize_t fill_fifo_to_the_brim(File &fifo_out, int signature = 0, int timeout_us 
 
 void hardware_driver_poll_single(int fifo)
 {
-	File fifo_in(openFifo(fifo, O_RDONLY));
-	File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND)); /* Don't communicate EOF */
+	dyplo::HardwareFifo fifo_in(openFifo(fifo, O_RDONLY));
+	dyplo::HardwareFifo fifo_out(openFifo(fifo, O_WRONLY|O_APPEND)); /* Don't communicate EOF */
+	fifo_out.addRouteTo(fifo_in.getNodeAndFifoIndex());
+
 	const int signature = 10000000 * (fifo+1);
 	int data = 42;
 
@@ -685,7 +661,7 @@ void hardware_driver_poll_single(int fifo)
 
 TEST(hardware_driver, f_poll)
 {
-	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
 	for (int i = 0; i < dyplo_cpu_fifo_count; ++i)
 	{
 		try
@@ -780,8 +756,10 @@ static void hardware_driver_irq_driven_read_single(int fifo)
 {
 	dyplo::Thread reader;
 
-	File fifo_in(openFifo(fifo, O_RDONLY));
-	File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
+	dyplo::HardwareFifo fifo_in(openFifo(fifo, O_RDONLY));
+	dyplo::HardwareFifo fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
+	fifo_out.addRouteTo(fifo_in.getNodeAndFifoIndex());
+
 	FileContext ctx(&fifo_in);
 	reader.start(thread_read_data, &ctx);
 	ctx.wait(); /* Block until we're calling "read" on the other thread*/
@@ -794,7 +772,7 @@ static void hardware_driver_irq_driven_read_single(int fifo)
 
 TEST(hardware_driver, g_irq_driven_read)
 {
-	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
 	for (int fifo = dyplo_cpu_fifo_count-1; fifo >= 0; --fifo) /* go back, variation */
 		hardware_driver_irq_driven_read_single(fifo);
 	check_all_input_fifos_are_empty();
@@ -822,9 +800,12 @@ void* thread_write_data(void* arg)
 void hardware_driver_irq_driven_write_single(int fifo)
 {
 	ssize_t total_written;
+
+	dyplo::HardwareFifo fifo_in(openFifo(fifo, O_RDONLY));
 	{
 		/* Make it so that the pipe is filled to the brim */
-		File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
+		dyplo::HardwareFifo fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
+		fifo_out.addRouteTo(fifo_in.getNodeAndFifoIndex());
 		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
 		CHECK(fifo_out.poll_for_outgoing_data(0)); /* Must have room */
 		/* Fill it until it is full */
@@ -835,7 +816,6 @@ void hardware_driver_irq_driven_write_single(int fifo)
 		/* Close and re-open the output to clear the "non-blocking" flag */
 	}
 
-	File fifo_in(openFifo(fifo, O_RDONLY));
 	File fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
 	FileContext ctx(&fifo_out);
 	dyplo::Thread writer;
@@ -876,7 +856,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 
 TEST(hardware_driver, h_irq_driven_write)
 {
-	const int dyplo_cpu_fifo_count = connect_all_fifos_in_loop();
+	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
 	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
 		hardware_driver_irq_driven_write_single(fifo);
 	check_all_input_fifos_are_empty();
