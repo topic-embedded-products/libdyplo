@@ -113,6 +113,7 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_DMASTANDALONE_START_FROM_LOGIC	0x2B
 #define DYPLO_IOC_DMASTANDALONE_STOP_TO_LOGIC	0x2C
 #define DYPLO_IOC_DMASTANDALONE_STOP_FROM_LOGIC	0x2D
+#define DYPLO_IOC_LICENSE_KEY	0x30
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -171,6 +172,9 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOCDMASTANDALONE_START_FROM_LOGIC   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_START_FROM_LOGIC)
 #define DYPLO_IOCDMASTANDALONE_STOP_TO_LOGIC  _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_STOP_TO_LOGIC)
 #define DYPLO_IOCDMASTANDALONE_STOP_FROM_LOGIC  _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_DMASTANDALONE_STOP_FROM_LOGIC)
+/* Read or write a 64-bit license key */
+#define DYPLO_IOCSLICENSE_KEY   _IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_LICENSE_KEY, unsigned long long)
+#define DYPLO_IOCGLICENSE_KEY   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_LICENSE_KEY, unsigned long long)
 } /* extern "C" */
 
 namespace dyplo
@@ -487,8 +491,9 @@ namespace dyplo
 
 	void HardwareControl::writeDyploLicense(unsigned long long license_blob)
 	{
-		seek(0x60);
-		write(&license_blob, sizeof(license_blob));
+		int result = ::ioctl(handle, DYPLO_IOCSLICENSE_KEY, &license_blob);
+		if (result < 0)
+			throw IOException(__func__);
 	}
 
 	void HardwareControl::writeDyploLicenseFile(const char* path_to_dyplo_license_file)
