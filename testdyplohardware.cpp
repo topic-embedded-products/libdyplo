@@ -71,23 +71,6 @@ static const unsigned char valid_bit_bitstream[128] = {
 
 struct hardware_programmer {};
 
-void create_dyplo_license_file()
-{
-	std::ofstream license_file("/tmp/dyplo_license_file.lic");
-	if (license_file.is_open())
-	{
-		license_file << "#" << std::endl;	
-		license_file << "# (C) Copyright 2013,2014 Topic Embedded Products B.V. (http://www.topic.nl)." << std::endl;
-		license_file << "# All rights reserved." << std::endl;
-		license_file << "# You can contact Topic by electronic mail via info@topic.nl or via" << std::endl;
-		license_file << "# paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands." << std::endl;
-		license_file << "#" << std::endl;
-		license_file << "#" << std::endl;
-		license_file << "DYPLO_DNA = 0x95829834954356" << std::endl;
-		license_file.close();
-	}
-}
-
 TEST(hardware_programmer, bin_file)
 {
 	TestContext tc;
@@ -218,25 +201,4 @@ TEST(hardware_programmer, find_bitstreams)
 	EQUAL("/tmp/dyplo_func_2/function2partition12.bit", filename);
 	filename = context.findPartition("dyplo_func_2", 11);
 	EQUAL("", filename); /* not found */
-}
-
-TEST(hardware_programmer, write_dyplo_license)
-{
-	TestContext tc;
-
-	dyplo::HardwareContext context("/tmp/dyplo"); /* Fake device */
-	dyplo::HardwareControl ctrl(context);
-	
-	// Function to write stub dyplo license file	
-	create_dyplo_license_file();
-
-	ctrl.writeDyploLicenseFile("/tmp/dyplo_license_file.lic");
-
-	unsigned long long value;
-	ctrl.seek(0x60);
-	ctrl.read(&value, sizeof(value));
-
-	EQUAL(0x95829834954356ULL, value);
-
-	::unlink("/tmp/dyplo_license_file.lic");
 }
