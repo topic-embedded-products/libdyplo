@@ -720,34 +720,45 @@ void* thread_read_data(void* arg)
 	}
 }
 
-void check_all_input_fifos_are_empty()
+static void check_if_input_fifo_is_empty_impl(std::ostringstream& msg, int fifo)
+{
+	File fifo_in(openFifo(fifo, O_RDONLY));
+
+	if (fifo_in.poll_for_incoming_data(0))
+	{
+		msg << "Input fifo " << fifo << " is not empty:";
+		msg << std::hex;
+		dyplo::set_non_blocking(fifo_in.handle);
+		int count = 0;
+		while (fifo_in.poll_for_incoming_data(0))
+		{
+			int data;
+			fifo_in.read(&data, sizeof(data));
+			msg << " 0x" << data;
+			if (++count > 10)
+			{
+				msg << "...";
+				break;
+			}
+		}
+		msg << std::dec << " (" << count << ")\n";
+	}
+}
+
+static void check_if_input_fifo_is_empty(int fifo)
+{
+	std::ostringstream msg;
+	check_if_input_fifo_is_empty_impl(msg, fifo);
+	if (msg.tellp() != 0)
+		FAIL(msg.str());
+}
+
+static void check_all_input_fifos_are_empty()
 {
 	std::ostringstream msg;
 	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count_r();
 	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
-	{
-		File fifo_in(openFifo(fifo, O_RDONLY));
-
-		if (fifo_in.poll_for_incoming_data(0))
-		{
-			msg << "Input fifo " << fifo << " is not empty:";
-			msg << std::hex;
-			dyplo::set_non_blocking(fifo_in.handle);
-			int count = 0;
-			while (fifo_in.poll_for_incoming_data(0))
-			{
-				int data;
-				fifo_in.read(&data, sizeof(data));
-				msg << " 0x" << data;
-				if (++count > 10)
-				{
-					msg << "...";
-					break;
-				}
-			}
-			msg << std::dec << " (" << count << ")\n";
-		}
-	}
+		check_if_input_fifo_is_empty_impl(msg, fifo);
 	if (msg.tellp() != 0)
 		FAIL(msg.str());
 }
@@ -826,7 +837,19 @@ void hardware_driver_irq_driven_write_single(int fifo)
 	int buffer[256];
 	ssize_t bytes = fifo_in.read(buffer, sizeof(buffer));
 	for (int i = 0; i < (bytes>>2); ++i)
+	{
+		if (buffer[i] != (total_read>>2) + i)
+		{
+			std::cout << "\nMismatch at " << i << " actual:" << buffer[i];
+			int limit = bytes>>2;
+			if (limit > i + 8)
+				limit = i + 8;
+			for (; i < limit; ++i)
+				std::cout << " " << i;
+			std::cout << std::endl;
+		}
 		EQUAL(buffer[i], (total_read>>2) + i);
+	}
 	total_read += bytes;
 	EQUAL((ssize_t)sizeof(buffer), bytes);
 	void* result;
@@ -858,7 +881,10 @@ TEST(hardware_driver, h_irq_driven_write)
 {
 	const int dyplo_cpu_fifo_count = get_dyplo_cpu_fifo_count();
 	for (int fifo = 0; fifo < dyplo_cpu_fifo_count; ++fifo)
+	{
 		hardware_driver_irq_driven_write_single(fifo);
+		check_if_input_fifo_is_empty(fifo);
+	}
 	check_all_input_fifos_are_empty();
 }
 
@@ -1111,6 +1137,103 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 	run_hdl_test(context, CPU_W, CPU_R, total_effect);
 	check_all_input_fifos_are_empty();
 }
+
+TEST(hardware_driver_hdl, l_hdl_block_maze_route_dma)
+{
+	static const int dma_node_count = get_dyplo_dma_node_count();
+	CHECK(dma_node_count >= 1);
+
+	static const int hdl_configuration_blob[] = {
+		1234, -1243, 1000001, 10001
+	};
+	int total_effect = 0;
+	for (unsigned int i = 0; i < sizeof(hdl_configuration_blob)/sizeof(hdl_configuration_blob[0]); ++i)
+		total_effect += 2 * hdl_configuration_blob[i];
+	/* Set up route: Loop through the HDL blocks four times */
+	const unsigned char ADDER1 = adders[0];
+	const unsigned char ADDER2 = adders[1];
+	const dyplo::HardwareControl::Route routes[] = {
+		{1, ADDER1, 0, ADDER1}, /* 1.0 -> 1.1 */
+		{0, ADDER2, 1, ADDER1}, /* -> 2.0 */
+		{1, ADDER2, 0, ADDER2}, /* -> 2.1 */
+		{2, ADDER1, 1, ADDER2}, /* -> 1.2 */
+		{3, ADDER1, 2, ADDER1}, /* -> 1.3 */
+		{2, ADDER2, 3, ADDER1}, /* -> 2.2 */
+		{3, ADDER2, 2, ADDER2}, /* -> 2.3 */
+	};
+	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	/* configure HDL block with coefficients */
+	for (int block = 0; block < 2; ++block)
+	{
+		try
+		{
+			File hdl_config(context.openConfig(adders[block], O_WRONLY));
+			EQUAL((ssize_t)sizeof(hdl_configuration_blob),
+				hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+		}
+		catch (const dyplo::IOException& ex)
+		{
+			FAIL(ex.what());
+		}
+	}
+
+	for (int dma_index = 0; dma_index < dma_node_count; ++dma_index)
+	{
+		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
+		dyplo::HardwareDMAFifo dma_w(context.openDMA(dma_index, O_RDWR));
+		dyplo::HardwareDMAFifo dma_r(context.openDMA(dma_node_count - dma_index - 1, O_RDONLY));
+		dma_w.addRouteTo(ADDER1);
+		dma_r.addRouteFrom(ADDER2 | (3 << 8)); /* FIFO number 3 */
+
+		static const unsigned int blocksize = 16 * 1024;
+		static const unsigned int num_blocks = 8;
+
+		dma_w.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, false);
+		EQUAL(num_blocks, dma_w.count());
+		dma_r.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, true);
+		EQUAL(num_blocks, dma_r.count());
+
+		int write_seed = 0;
+		int read_seed = total_effect;
+		/* Send data... */
+		for (int loop = 0; loop < 2; ++loop)
+		{
+			for (unsigned int i = 0; i < num_blocks; ++i)
+			{
+				dyplo::HardwareDMAFifo::Block *block = dma_w.dequeue();
+				CHECK(block != NULL);
+				unsigned int num_words = block->size / sizeof(int);
+				int* data = (int*)block->data;
+				for (unsigned int j = 0; j < num_words; ++j)
+					data[j] = write_seed++;
+				block->bytes_used = num_words * sizeof(int);
+				dma_w.enqueue(block);
+			}
+			/* Prime the reader with empty blocks*/
+			for (unsigned int i = 0; i < num_blocks; ++i)
+			{
+				dyplo::HardwareDMAFifo::Block *block = dma_r.dequeue();
+				block->bytes_used = block->size;
+				dma_r.enqueue(block);
+			}
+			/* Read back the data */
+			for (unsigned int i = 0; i < num_blocks; ++i)
+			{
+				dyplo::HardwareDMAFifo::Block *block = dma_r.dequeue();
+				EQUAL(blocksize, block->bytes_used);
+				EQUAL(blocksize, block->size);
+				unsigned int num_words = block->size / sizeof(int);
+				int* data = (int*)block->data;
+				for (unsigned int j = 0; j < num_words; ++j)
+				{
+					EQUAL(read_seed, data[j]);
+					++read_seed;
+				}
+			}
+		}
+	}
+}
+
 
 static const int how_many_blocks = 1024;
 
@@ -1960,17 +2083,27 @@ TEST(hardware_driver_ctx, q_dma_standalone_pass)
 	/* transfer some data and check it */
 	std::vector<unsigned int> testdata(blocksize_words);
 	std::vector<unsigned int> testresult(blocksize_words);
-	const unsigned int seed = 0;
+	unsigned int seed = 0;
 	for (unsigned int i = 0; i < blocksize_words; ++i)
-		testdata[i] = seed + i;
+		testdata[i] = seed++;
 
 	/* Start the node */
 	dma_sa.standaloneStart(true);
 	to_logic.write(&testdata[0], blocksize);
 
 	dma_sa.standaloneStart(false);
+	CHECK(from_logic.poll_for_incoming_data(5));
 	from_logic.read(&testresult[0], blocksize);
 
+	for (unsigned int i = 0; i < blocksize_words; ++i)
+		EQUAL(testdata[i], testresult[i]);
+
+	/* Do another round */
+	for (unsigned int i = 0; i < blocksize_words; ++i)
+		testdata[i] = seed++;
+	to_logic.write(&testdata[0], blocksize);
+	CHECK(from_logic.poll_for_incoming_data(5));
+	from_logic.read(&testresult[0], blocksize);
 	for (unsigned int i = 0; i < blocksize_words; ++i)
 		EQUAL(testdata[i], testresult[i]);
 
