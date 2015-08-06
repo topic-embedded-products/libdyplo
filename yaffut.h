@@ -99,7 +99,7 @@ public:
     {
       if(name.empty () || it->first == name
 	 || EqualsSuiteName (name, it->first))
-	std::cerr << i++ << ")\t";
+	std::cout << i++ << ")\t";
 	std::cout << it->first << std::endl;
     }
   }
