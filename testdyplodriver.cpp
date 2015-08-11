@@ -1424,7 +1424,15 @@ TEST(hardware_driver_ctx, o_cpu_dma_transfer)
 			dma0r.read(&testresult[0], dmaBufferSize);
 			/* Verify the data */
 			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
-				EQUAL(testdata[i], testresult[i]);
+			{
+				if (testresult[i] != testdata[i])
+				{
+					std::ostringstream msg;
+					msg << "Mismatch at repeat=" << repeat << " i=" << i
+						<< " expect=" << testdata[i] << " result=" << testresult[i];
+					FAIL(msg.str());
+				}
+			}
 			seed += dmaBufferSizeWords;
 		}
 
