@@ -1533,15 +1533,39 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 		/* Read from empty fifo, must not block but return EAGAIN error */
 		ASSERT_THROW(dma0r.read(&testresult[0], dmaBufferSize), dyplo::IOException);
 
-		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
-			testdata[i] = seed + i;
-		/* Must be able to send 1 full buffer without blocking */
-		EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
-		/* And once the data flows into the reader, more is available */
-		CHECK(dma0w.poll_for_outgoing_data(1));
-
+		unsigned int seed_sent = seed;
+		unsigned int buffers_sent = 0;
+		unsigned int total_written = 0;
+		do
+		{
+			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+				testdata[i] = seed_sent++;
+			EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
+			total_written += dmaBufferSize;
+			if (++buffers_sent > 256)
+				FAIL("Outgoing DMA keeps accepting data");
+		} while (dma0w.poll_for_outgoing_data(0));
+		
+		/* Must be able to send >1 full buffer without blocking */
+		CHECK(buffers_sent > 1);
+		/* Keep sending until we get an EAGAIN error */
+		for(;;) {
+			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+				testdata[i] = seed_sent++;
+			try {
+				total_written += dma0w.write(&testdata[0], dmaBufferSize);
+				if (++buffers_sent > 256)
+					FAIL("Outgoing DMA never returns EAGAIN");
+			}
+			catch (const dyplo::IOException& ex)
+			{
+				EQUAL(EAGAIN, ex.m_errno);
+				break;
+			}
+		}
+		
 		unsigned int total_read = 0;
-		while (total_read != dmaBufferSize) {
+		while (total_read != total_written) {
 			/* Data must arrive at incoming node */
 			CHECK(dma0r.poll_for_incoming_data(1));
 			size_t bytes = dma0r.read(&testresult[0], dmaBufferSize);
@@ -1554,6 +1578,8 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 		}
 		/* All done, no more data */
 		CHECK(!dma0r.poll_for_incoming_data(0));
+		/* And outgoing node has room for more again */
+		CHECK(dma0w.poll_for_outgoing_data(0));
 	}
 }
 
@@ -1589,6 +1615,7 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		dma0r.reset();
 		const unsigned int thd = 4096;
 		dma0r.setDataTreshold(thd);
+		EQUAL(thd, dma0r.getDataTreshold());
 		/* Check if the new treshold works by transferring one block */
 		CHECK(!dma0r.poll_for_incoming_data(0));
 		EQUAL(thd, dma0w.write(&testdata[0], thd));
@@ -1600,7 +1627,8 @@ TEST(hardware_driver_ctx, p_dma_reset)
 			EQUAL(seed + i, testresult[i]);
 		/* Change it back to the default */
 		dma0r.reset();
-		dma0r.setDataTreshold(64*1024);
+		dma0r.setDataTreshold(dmaBufferSize);
+		EQUAL(dmaBufferSize, dma0r.getDataTreshold());
 		dma0w.reset();
 		CHECK(!dma0r.poll_for_incoming_data(0));
 
@@ -2270,8 +2298,7 @@ TEST(hardware_driver_ctx, q_dma_usersignal)
 	dyplo::HardwareFifo fifo2(context.openFifo(0, O_WRONLY|O_APPEND));
 	fifo1.addRouteFrom(fifo2.getNodeAndFifoIndex());
 
-	/* Inside knowledge: The DMA block size is 1/4 of the total buffer */
-	const unsigned int blocksize = (unsigned int)fifo1.getDataTreshold() / 4;
+	const unsigned int blocksize = (unsigned int)fifo1.getDataTreshold();
 	const unsigned int smallblock = sizeof(int) * 64;
 
 	std::vector<int> data(blocksize/sizeof(int));

@@ -130,7 +130,7 @@ namespace dyplo
 		void setUserSignal(int usersignal);
 		int getUserSignal();
 	};
-
+	
 	class HardwareDMAFifo: public HardwareFifo
 	{
 	public:
