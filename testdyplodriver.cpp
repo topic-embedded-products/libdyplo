@@ -1441,75 +1441,78 @@ TEST(hardware_driver_ctx, o_cpu_dma_transfer)
 	}
 }
 
-TEST(hardware_driver_ctx, p_dma_loopback)
+TEST(hardware_driver_ctx, p_dma_crossbar)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
-	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
+	for (int dma_index_w = 0; dma_index_w < number_of_dma_nodes; ++dma_index_w)
 	{
-		/* Connect the nodes in a cross */
-		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
-		dyplo::HardwareFifo dma0r(context.openDMA(number_of_dma_nodes - dma_index - 1, O_RDONLY));
-
-		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
-
-		unsigned int dmaBufferSize = dma0w.getDataTreshold();
-		/* Expect a sensible size, even 1k is rediculously small, but still
-		 * bigger than what the (non-DMA) CPU node would support */
-		CHECK(dmaBufferSize > 1024);
-		unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
-		unsigned int seed = 0;
-		std::vector<unsigned int> testdata(dmaBufferSizeWords);
-		std::vector<unsigned int> testresult(dmaBufferSizeWords);
-
-		/* No data yet. This also has the side-effect of starting
-		 * the DMA data pump, so writing to the cpu node will not block */
-		CHECK(! dma0r.poll_for_incoming_data(0) );
-		/* Plenty space to write into */
-		CHECK(dma0w.poll_for_outgoing_data(0));
-
-		/* "Prime" the transfer */
-		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
-			testdata[i] = seed + i;
-		/* Must be able to send 2x full buffer without blocking */
-		dma0w.write(&testdata[0], dmaBufferSize);
-
-		for (unsigned int repeat = 0; repeat < 64; ++repeat)
+		dyplo::HardwareFifo dma0w(context.openDMA(dma_index_w, O_WRONLY));
+		for (int dma_index_r = 0; dma_index_r < number_of_dma_nodes; ++dma_index_r)
 		{
-			unsigned int prevseed = seed;
-			seed += dmaBufferSizeWords;
+			/* Connect the nodes in a cross */
+			dyplo::HardwareFifo dma0r(context.openDMA(dma_index_r, O_RDONLY));
+
+			dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+
+			unsigned int dmaBufferSize = dma0r.getDataTreshold();
+			/* Expect a sensible size, even 1k is rediculously small, but still
+			 * bigger than what the (non-DMA) CPU node would support */
+			CHECK(dmaBufferSize > 1024);
+			unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
+			unsigned int seed = 0;
+			std::vector<unsigned int> testdata(dmaBufferSizeWords);
+			std::vector<unsigned int> testresult(dmaBufferSizeWords);
+
+			/* No data yet. This also has the side-effect of starting
+			 * the DMA data pump, so writing to the cpu node will not block */
+			CHECK(! dma0r.poll_for_incoming_data(0) );
+			/* Plenty space to write into */
+			CHECK(dma0w.poll_for_outgoing_data(0));
+
+			/* "Prime" the transfer */
 			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
 				testdata[i] = seed + i;
-			/* Must be able to send a full buffer without blocking */
+			/* Must be able to send 2x full buffer without blocking */
 			dma0w.write(&testdata[0], dmaBufferSize);
-			/* And read it all back without blocking too */
-			dma0r.read(&testresult[0], dmaBufferSize);
-			/* Verify the data */
-			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i) {
-				if (prevseed + i != testresult[i])
-				{
-					std::ostringstream msg;
-					msg << "Mismatch at repeat=" << repeat << " i=" << i
-						<< " expect=" << (prevseed+i) << " result=" << testresult[i] << "\n";
-					unsigned int limit = i + 64;
-					if (limit > dmaBufferSizeWords)
-						limit = dmaBufferSizeWords;
-					i = (i < 16) ? 0 : (i - 16) & ~3;
-					for ( ;i < limit; ++i) {
-						if ((i % 4) == 0)
-							msg << "\n";
-						msg << " [" << i << "]=" << testresult[i];
+
+			for (unsigned int repeat = 0; repeat < 64; ++repeat)
+			{
+				unsigned int prevseed = seed;
+				seed += dmaBufferSizeWords;
+				for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+					testdata[i] = seed + i;
+				/* Must be able to send a full buffer without blocking */
+				dma0w.write(&testdata[0], dmaBufferSize);
+				/* And read it all back without blocking too */
+				dma0r.read(&testresult[0], dmaBufferSize);
+				/* Verify the data */
+				for (unsigned int i = 0; i < dmaBufferSizeWords; ++i) {
+					if (prevseed + i != testresult[i])
+					{
+						std::ostringstream msg;
+						msg << "Mismatch at repeat=" << repeat << " i=" << i
+							<< " expect=" << (prevseed+i) << " result=" << testresult[i] << "\n";
+						unsigned int limit = i + 32;
+						if (limit > dmaBufferSizeWords)
+							limit = dmaBufferSizeWords;
+						i = (i < 16) ? 0 : (i - 16) & ~3;
+						for ( ;i < limit; ++i) {
+							if ((i % 4) == 0)
+								msg << "\n";
+							msg << " [" << i << "]=" << testresult[i];
+						}
+						FAIL(msg.str());
 					}
-					FAIL(msg.str());
 				}
 			}
-		}
-		dma0r.read(&testresult[0], dmaBufferSize);
-		/* Verify the data */
-		for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
-			EQUAL(testdata[i], testresult[i]);
+			dma0r.read(&testresult[0], dmaBufferSize);
+			/* Verify the data */
+			for (unsigned int i = 0; i < dmaBufferSizeWords; ++i)
+				EQUAL(testdata[i], testresult[i]);
 
-		CHECK(! dma0r.poll_for_incoming_data(0) );
-		CHECK(dma0w.poll_for_outgoing_data(0));
+			CHECK(! dma0r.poll_for_incoming_data(0) );
+			CHECK(dma0w.poll_for_outgoing_data(0));
+		}
 	}
 }
 
