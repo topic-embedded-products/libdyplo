@@ -1620,11 +1620,12 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		CHECK(bytes);
 		for (unsigned int i = 0; i < words; ++i)
 			EQUAL(seed + i, testresult[i]);
+		/* Pick a different size */
+		const unsigned int thd = (dmaBufferSize == 4096) ? 2048 : 4096;
 		/* Cannot change treshold because DMA is "primed" */
-		ASSERT_THROW(dma0r.setDataTreshold(4096), dyplo::IOException);
+		ASSERT_THROW(dma0r.setDataTreshold(thd), dyplo::IOException);
 		/* Reset the DMA controller to be able to change the value */
 		dma0r.reset();
-		const unsigned int thd = 4096;
 		dma0r.setDataTreshold(thd);
 		EQUAL(thd, dma0r.getDataTreshold());
 		/* Check if the new treshold works by transferring one block */
