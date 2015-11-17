@@ -51,8 +51,10 @@ namespace dyplo
 		/* Program device using a partial bitstream */
 		static void setProgramMode(bool is_partial_bitstream);
 		static bool getProgramMode();
+		static unsigned int program(File &output, File &input);
 		static unsigned int program(File &output, const char* filename);
 		static unsigned int program(const char* filename);
+		static unsigned int program(File &input);
 
 		/* Find bitfiles in directories */
 		unsigned int getAvailablePartitions(const char* function);

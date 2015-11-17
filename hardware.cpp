@@ -259,9 +259,8 @@ namespace dyplo
 	}
 
 	static const size_t BUFFER_SIZE = 16*1024;
-	unsigned int HardwareContext::program(File &output, const char* filename)
+	unsigned int HardwareContext::program(File &output, File &input)
 	{
-		File input(filename, O_RDONLY);
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
 		ssize_t bytes = input.read(&buffer[0], BUFFER_SIZE);
 		if (bytes < 64)
@@ -335,10 +334,22 @@ namespace dyplo
 		}
 	}
 
+	unsigned int HardwareContext::program(File &output, const char* filename)
+	{
+		File input(filename, O_RDONLY);
+		return program(output, input);
+	}
+
 	unsigned int HardwareContext::program(const char* filename)
 	{
 		File output(XILINX_XDEVCFG, O_WRONLY);
 		return program(output, filename);
+	}
+
+	unsigned int HardwareContext::program(File &input)
+	{
+		File output(XILINX_XDEVCFG, O_WRONLY);
+		return program(output, input);
 	}
 
 	static bool is_digit(const char c)
