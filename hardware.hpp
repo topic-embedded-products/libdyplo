@@ -93,6 +93,7 @@ namespace dyplo
 		void disableNodes(unsigned int mask);
 		void writeDyploLicense(unsigned long long license_blob);
 		void writeDyploLicenseFile(const char* path_to_dyplo_license_file);
+		unsigned int readDyploStaticID();
 
 		bool isNodeEnabled(int node) { return (getEnabledNodes() & (1<<node)) != 0; }
 		void enableNode(int node) { enableNodes(1<<node); }

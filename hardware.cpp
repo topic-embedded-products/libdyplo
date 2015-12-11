@@ -114,6 +114,7 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_DMASTANDALONE_STOP_TO_LOGIC	0x2C
 #define DYPLO_IOC_DMASTANDALONE_STOP_FROM_LOGIC	0x2D
 #define DYPLO_IOC_LICENSE_KEY	0x30
+#define DYPLO_IOC_STATIC_ID	0x31
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -175,6 +176,8 @@ struct dyplo_dma_configuration_req {
 /* Read or write a 64-bit license key */
 #define DYPLO_IOCSLICENSE_KEY   _IOW(DYPLO_IOC_MAGIC, DYPLO_IOC_LICENSE_KEY, unsigned long long)
 #define DYPLO_IOCGLICENSE_KEY   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_LICENSE_KEY, unsigned long long)
+/* Retrieve static ID (to match against partials) */
+#define DYPLO_IOCGSTATIC_ID   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_STATIC_ID, unsigned int)
 } /* extern "C" */
 
 namespace dyplo
@@ -528,6 +531,14 @@ namespace dyplo
 			license_file.close();
 		}
 		writeDyploLicense(hash);
+	}
+
+	unsigned int HardwareControl::readDyploStaticID()
+	{
+		unsigned int data;
+		if (::ioctl(handle, DYPLO_IOCGSTATIC_ID, &data) < 0)
+			throw IOException(__func__);
+		return data;
 	}
 
 	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)

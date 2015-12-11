@@ -2272,3 +2272,11 @@ TEST(hardware_driver_ctx, q_dma_usersignal)
 	EQUAL(blocksize, fifo1.read(&result[0], blocksize));
 	EQUAL(0, fifo1.getUserSignal());
 }
+
+TEST(hardware_driver, z_static_id)
+{
+	dyplo::HardwareContext context;
+	dyplo::HardwareControl ctrl(context);
+	unsigned int id = ctrl.readDyploStaticID();
+	std::cout << "(0x" << std::hex << id << ") ";
+}
