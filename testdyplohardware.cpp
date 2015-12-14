@@ -71,6 +71,11 @@ static const unsigned char valid_bit_bitstream[128] = {
 
 struct hardware_programmer {};
 
+static unsigned int bswap32(unsigned int x)
+{
+	return (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
+}
+
 TEST(hardware_programmer, bin_file)
 {
 	TestContext tc;
@@ -103,6 +108,24 @@ TEST(hardware_programmer, bin_file)
 		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); /* Properly truncated */
 		for (int i=0; i<32; ++i)
 			EQUAL(i+1, (int)buffer[i]); /* Byte reversal check */
+	}
+	/* Big bit stream (multiple read/write cycles of 16k */
+	{
+		xdevcfg.seek(0);
+		EQUAL(0, ::ftruncate(xdevcfg, 0));
+		bitstream.seek(0);
+		unsigned char size[4] = {0, 1, 0, 0}; /* 64k */
+		bitstream.write(valid_bit_bitstream, 0x5A); /* up until "size" */
+		bitstream.write(&size, 4);
+		std::vector<unsigned int> buffer(0x4000); /* 16k words */
+		for (unsigned int i = 0; i < buffer.size(); ++i)
+			buffer[i] = bswap32(i);
+		bitstream.write(&buffer[0], 0x10000);
+		EQUAL(0x10000u, ctrl.program(xdevcfg, "/tmp/bitstream"));
+		xdevcfg.seek(0);
+		EQUAL(0x10000u, xdevcfg.read(&buffer[0], 0x10000u)); /* Properly truncated */
+		for (unsigned int i = 0; i < buffer.size(); ++i)
+			EQUAL(i, buffer[i]);
 	}
 	/* Truncated "bit" stream */
 	{

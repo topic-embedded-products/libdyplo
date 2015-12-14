@@ -80,6 +80,8 @@ namespace dyplo
 			return result;
 		}
 
+		ssize_t read_all(void *buf, size_t count);
+
 		off_t seek(off_t offset, int whence = SEEK_SET)
 		{
 			off_t result = ::lseek(handle, offset, whence);

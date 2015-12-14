@@ -261,11 +261,29 @@ namespace dyplo
 		return (data[0] << 8) | data[1];
 	}
 
-	static const size_t BUFFER_SIZE = 16*1024;
+	static void swap_buffer(unsigned char* buffer, unsigned int size)
+	{
+		for (unsigned int index = 0; index < size; index += 4)
+		{
+			/* Flip the bytes */
+			unsigned char* data = &buffer[index];
+			unsigned char t1, t2;
+			t1 = data[0];
+			t2 = data[1];
+			data[0] = data[3];
+			data[1] = data[2];
+			data[3] = t1;
+			data[2] = t2;
+		}
+	}
+
+	static const size_t ALIGN_SIZE = 16 * 1024;
+	static const size_t BUFFER_SIZE = 2 * ALIGN_SIZE;
+
 	unsigned int HardwareContext::program(File &output, File &input)
 	{
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
-		ssize_t bytes = input.read(&buffer[0], BUFFER_SIZE);
+		ssize_t bytes = input.read_all(&buffer[0], ALIGN_SIZE);
 		if (bytes < 64)
 			throw TruncatedFileException();
 		if ((parse_u16(&buffer[0]) == 9) && /* Magic marker for .bit file */
@@ -290,26 +308,37 @@ namespace dyplo
 			if (data+4 >= end)
 				throw TruncatedFileException();
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-			input.seek(data + 4 - &buffer[0]);
-			unsigned int total_bytes = 0;
+			data += 4;
+			unsigned int total_bytes = bytes - (data - &buffer[0]);
+			if (total_bytes >= size)
+			{
+				total_bytes = size;
+			}
+			else
+			{
+				/* make sure that we always transfer a multiple of
+				 * ALIGN_SIZE bytes to logic */
+				unsigned int align = total_bytes % ALIGN_SIZE;
+				if (align != 0)
+				{
+					align = ALIGN_SIZE - align; /* number of bytes to read */
+					bytes = input.read_all(data + total_bytes, align);
+					if (bytes < align)
+						throw TruncatedFileException();
+					total_bytes += align;
+				}
+			}
+			swap_buffer(data, total_bytes);
+			bytes = output.write(data, total_bytes);
+			if (bytes < total_bytes)
+				throw TruncatedFileException();
 			while (total_bytes < size)
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
-				bytes = input.read(&buffer[0], to_read);
+				bytes = input.read_all(&buffer[0], to_read);
 				if (bytes < to_read)
 					throw TruncatedFileException();
-				for (unsigned int index = 0; index < to_read; index += 4)
-				{
-					/* Flip the bytes */
-					unsigned char* data = &buffer[index];
-					unsigned char t1, t2;
-					t1 = data[0];
-					t2 = data[1];
-					data[0] = data[3];
-					data[1] = data[2];
-					data[3] = t1;
-					data[2] = t2;
-				}
+				swap_buffer(&buffer[0], bytes);
 				bytes = output.write(&buffer[0], to_read);
 				if (bytes < to_read)
 					throw TruncatedFileException();

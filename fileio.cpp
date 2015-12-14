@@ -45,6 +45,27 @@ namespace dyplo
 			throw dyplo::IOException();
 	}
 
+	/* Read all file contents until count bytes or end-of-file. Unlike
+	 * regular read, never returns a short read until EOF. */
+	ssize_t File::read_all(void *buf, size_t count)
+	{
+		size_t bytes = 0;
+		for (;;)
+		{
+			ssize_t result = ::read(handle, buf, count);
+			if (result <= 0) {
+				if ((result == 0) || (bytes != 0))
+					return bytes;
+				throw dyplo::IOException();
+			}
+			bytes += result;
+			count -= result;
+			if (count == 0)
+				return bytes;
+			buf += result;
+		}
+	}
+
 	void File::fcntl_set_flag(long flag)
 	{
 		int flags = ::fcntl(handle, F_GETFL, 0);
