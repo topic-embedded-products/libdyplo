@@ -34,7 +34,13 @@
 #include "fileio.hpp"
 
 namespace dyplo
-{
+{	
+	class ProgramTagCallback
+	{
+	public:
+		virtual void processTag(char tag, unsigned short size, const void *data) = 0;
+	};
+
 	class HardwareContext
 	{
 	public:
@@ -48,13 +54,15 @@ namespace dyplo
 		int openControl(int access);
 		int openDMA(int index, int access);
 
-		/* Program device using a partial bitstream */
+		/* Program device using a partial or full bitstream */
 		static void setProgramMode(bool is_partial_bitstream);
 		static bool getProgramMode();
-		static unsigned int program(File &output, File &input);
-		static unsigned int program(File &output, const char* filename);
-		static unsigned int program(const char* filename);
+		static const char* getDefaultProgramDestination();
+		static unsigned int program(File &output, File &input, ProgramTagCallback *tagCallback = NULL);
+		static unsigned int program(File &output, const char* filename, ProgramTagCallback *tagCallback = NULL);
 		static unsigned int program(File &input);
+		static unsigned int program(const char* filename);
+		static bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 
 		/* Find bitfiles in directories */
 		unsigned int getAvailablePartitions(const char* function);

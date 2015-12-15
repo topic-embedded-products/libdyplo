@@ -35,6 +35,7 @@
 #include <sstream>
 #include <vector>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <fstream>
 
@@ -255,61 +256,72 @@ namespace dyplo
 			throw TruncatedFileException();
 		return (value != '0');
 	}
+	
+	const char* HardwareContext::getDefaultProgramDestination()
+	{
+		return XILINX_XDEVCFG;
+	}
 
 	static unsigned short parse_u16(const unsigned char* data)
 	{
 		return (data[0] << 8) | data[1];
 	}
 
-	static void swap_buffer(unsigned char* buffer, unsigned int size)
+	static void swap_buffer_aligned(unsigned int* buffer, unsigned int size)
 	{
-		for (unsigned int index = 0; index < size; index += 4)
+		while (size)
 		{
-			/* Flip the bytes */
-			unsigned char* data = &buffer[index];
-			unsigned char t1, t2;
-			t1 = data[0];
-			t2 = data[1];
-			data[0] = data[3];
-			data[1] = data[2];
-			data[3] = t1;
-			data[2] = t2;
+			/* Flip the bytes (gcc will recognize this as a "bswap") */
+			unsigned int x = *buffer;
+			*buffer = (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
+			++buffer;
+			--size;
 		}
 	}
 
-	static const size_t ALIGN_SIZE = 16 * 1024;
-	static const size_t BUFFER_SIZE = 2 * ALIGN_SIZE;
+	static const size_t ALIGN_SIZE = 4 * 1024;
+	static const size_t BUFFER_SIZE = 8 * ALIGN_SIZE;
 
-	unsigned int HardwareContext::program(File &output, File &input)
+	unsigned int HardwareContext::program(File &output, File &input, ProgramTagCallback *tagCallback)
 	{
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
-		ssize_t bytes = input.read_all(&buffer[0], ALIGN_SIZE);
+		unsigned char* buffer_start = &buffer[0];
+		ssize_t bytes = input.read_all(buffer_start, ALIGN_SIZE);
 		if (bytes < 64)
 			throw TruncatedFileException();
-		if ((parse_u16(&buffer[0]) == 9) && /* Magic marker for .bit file */
-			(parse_u16(&buffer[11]) == 1) &&
+		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */
+			(parse_u16(buffer_start + 11) == 1) &&
 			(buffer[13] == 'a'))
 		{
 			/* It's a bitstream, convert and flash */
-			const unsigned char* end = &buffer[bytes];
-			unsigned char* data = &buffer[13];
+			const unsigned char* end = buffer_start + bytes;
+			unsigned char* data = buffer_start + 13;
 			/* Browse through tag/value pairs looking for the "e" */
-			while (*data != 'e')
+			for(;;)
 			{
+				unsigned char tag = *data;
+				if (tag == 'e') /* Data tag, stop here */
+					break;
 				++data;
 				if (data >= end)
 					throw TruncatedFileException();
 				unsigned short sz = parse_u16(data);
-				data += 2 + sz;
+				unsigned char* value = data + 2;
+				data = value + sz;
 				if (data >= end)
 					throw TruncatedFileException();
+				if (tagCallback)
+					tagCallback->processTag(tag, sz, value);
 			}
 			++data;
 			if (data+4 >= end)
 				throw TruncatedFileException();
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			data += 4;
-			unsigned int total_bytes = bytes - (data - &buffer[0]);
+			unsigned int total_bytes = bytes - (data - buffer_start);
+			/* Move the remaining data to the buffer start to align
+			 * it on word boundary. */
+			memmove(buffer_start, data, total_bytes);
 			if (total_bytes >= size)
 			{
 				total_bytes = size;
@@ -322,24 +334,24 @@ namespace dyplo
 				if (align != 0)
 				{
 					align = ALIGN_SIZE - align; /* number of bytes to read */
-					bytes = input.read_all(data + total_bytes, align);
+					bytes = input.read_all(buffer_start + total_bytes, align);
 					if (bytes < align)
 						throw TruncatedFileException();
 					total_bytes += align;
 				}
 			}
-			swap_buffer(data, total_bytes);
-			bytes = output.write(data, total_bytes);
+			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
+			bytes = output.write(buffer_start, total_bytes);
 			if (bytes < total_bytes)
 				throw TruncatedFileException();
 			while (total_bytes < size)
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
-				bytes = input.read_all(&buffer[0], to_read);
+				bytes = input.read_all(buffer_start, to_read);
 				if (bytes < to_read)
 					throw TruncatedFileException();
-				swap_buffer(&buffer[0], bytes);
-				bytes = output.write(&buffer[0], to_read);
+				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
+				bytes = output.write(buffer_start, to_read);
 				if (bytes < to_read)
 					throw TruncatedFileException();
 				total_bytes += bytes;
@@ -350,43 +362,71 @@ namespace dyplo
 		{
 			/* Probably a bin file, they tend to start with all FF...
 			 * so that seems a reasonable sanity check. */
-			if (*(unsigned int*)&buffer[0] != 0xFFFFFFFF)
+			if (*(unsigned int*)buffer_start != 0xFFFFFFFF)
 				throw std::runtime_error("Unrecognized bitstream format");
 			unsigned int total_written = 0;
 			do
 			{
-				ssize_t bytes_written = output.write(&buffer[0], bytes);
+				ssize_t bytes_written = output.write(buffer_start, bytes);
 				if (bytes_written < bytes)
 					throw TruncatedFileException();
 				total_written += bytes;
-				bytes = input.read(&buffer[0], BUFFER_SIZE);
+				bytes = input.read_all(buffer_start, BUFFER_SIZE);
 			}
 			while (bytes);
 			return total_written;
 		}
 	}
 
-	unsigned int HardwareContext::program(File &output, const char* filename)
+	unsigned int HardwareContext::program(File &output, const char* filename, ProgramTagCallback *tagCallback)
 	{
 		File input(filename, O_RDONLY);
-		return program(output, input);
+		return program(output, input, tagCallback);
 	}
 
 	unsigned int HardwareContext::program(const char* filename)
 	{
-		File output(XILINX_XDEVCFG, O_WRONLY);
+		File output(getDefaultProgramDestination(), O_WRONLY);
 		return program(output, filename);
 	}
 
 	unsigned int HardwareContext::program(File &input)
 	{
-		File output(XILINX_XDEVCFG, O_WRONLY);
+		File output(getDefaultProgramDestination(), O_WRONLY);
 		return program(output, input);
 	}
 
 	static bool is_digit(const char c)
 	{
 		return (c >= '0') && (c <= '9');
+	}
+
+	bool HardwareContext::parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id)
+	{
+		const char* end;
+		bool result = false;
+		while (size)
+		{
+			end = (const char*)memchr(data, ';', size);
+			if (!end)
+				end = data + size;
+			if (!memcmp(data, "UserID=", 7))
+			{
+				if (user_id)
+					*user_id = strtoul(data + 7, NULL, 0);
+				result = true;
+			}
+			else if (is_partial && !memcmp(data, "PARTIAL=", 8))
+			{
+				*is_partial = data[8] == 'T';
+			}
+			size -= end - data;
+			if (!size)
+				return result;
+			data = end + 1;
+			--size;
+		}
+		return result;
 	}
 
 	static int parse_number_from_name(const char* name)

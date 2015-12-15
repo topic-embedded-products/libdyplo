@@ -71,6 +71,27 @@ static const unsigned char valid_bit_bitstream[128] = {
 
 struct hardware_programmer {};
 
+class TestProgramTagCallback: public dyplo::ProgramTagCallback
+{
+public:
+	std::map<char, std::string> tags;
+	virtual void processTag(char tag, unsigned short size, const void *data)
+	{
+		tags[tag] = std::string((const char*)data, size);
+	}
+	void verify()
+	{
+		CHECK(!tags.empty());
+		std::string v = tags['a'];
+		std::cout << v.size() << ':';
+		
+		EQUAL(std::string("dyplo_wrapper;UserID=0XFFFFFFFF\0", 32), tags['a']);
+		EQUAL(std::string("7z020clg484\0", 12), tags['b']);
+		EQUAL(std::string("2013/08/30\0", 11), tags['c']);
+		EQUAL(std::string("11:52:15\0", 9), tags['d']);
+	}
+};
+
 static unsigned int bswap32(unsigned int x)
 {
 	return (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
@@ -98,16 +119,18 @@ TEST(hardware_programmer, bin_file)
 	}
 	/* Valid "bit" stream, must remove header and flip bytes */
 	{
+		TestProgramTagCallback tagger;
 		xdevcfg.seek(0);
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		bitstream.write(valid_bit_bitstream, sizeof(valid_bit_bitstream));
-		EQUAL(32u, ctrl.program(xdevcfg, "/tmp/bitstream"));
+		EQUAL(32u, ctrl.program(xdevcfg, "/tmp/bitstream", &tagger));
 		std::vector<unsigned char> buffer(sizeof(valid_bit_bitstream));
 		xdevcfg.seek(0);
 		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); /* Properly truncated */
 		for (int i=0; i<32; ++i)
 			EQUAL(i+1, (int)buffer[i]); /* Byte reversal check */
+		tagger.verify();
 	}
 	/* Big bit stream (multiple read/write cycles of 16k */
 	{
@@ -121,7 +144,7 @@ TEST(hardware_programmer, bin_file)
 		for (unsigned int i = 0; i < buffer.size(); ++i)
 			buffer[i] = bswap32(i);
 		bitstream.write(&buffer[0], 0x10000);
-		EQUAL(0x10000u, ctrl.program(xdevcfg, "/tmp/bitstream"));
+		EQUAL(0x10000u, ctrl.program(xdevcfg, "/tmp/bitstream", NULL));
 		xdevcfg.seek(0);
 		EQUAL(0x10000u, xdevcfg.read(&buffer[0], 0x10000u)); /* Properly truncated */
 		for (unsigned int i = 0; i < buffer.size(); ++i)
@@ -129,13 +152,47 @@ TEST(hardware_programmer, bin_file)
 	}
 	/* Truncated "bit" stream */
 	{
+		TestProgramTagCallback tagger;
 		xdevcfg.seek(0);
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		EQUAL(0, ::ftruncate(bitstream, sizeof(valid_bit_bitstream) - 10));
-		ASSERT_THROW(ctrl.program(xdevcfg, "/tmp/bitstream"), dyplo::TruncatedFileException);
+		ASSERT_THROW(ctrl.program(xdevcfg, "/tmp/bitstream", &tagger), dyplo::TruncatedFileException);
+		/* Tags must still have been processed */
+		tagger.verify();
 	}
 	::unlink("/tmp/xdevcfg");
+}
+
+TEST(hardware_programmer, parse_description_tag)
+{
+	unsigned int user_id = 0;
+	bool partial = false;
+	bool result;
+	static const char d1[] = "dyplo_wrapper;UserID=0X1234abcd\0";
+	result = dyplo::HardwareContext::parseDescriptionTag(d1, sizeof(d1), &partial, &user_id);
+	EQUAL(0x1234abcdu, user_id);
+	EQUAL(false, partial);
+	EQUAL(true, result);
+	static const char d2[] = "dyplo_wrapper;UserID=0xAB12;PARTIAL=TRUE\0";
+	result = dyplo::HardwareContext::parseDescriptionTag(d2, sizeof(d2), &partial, &user_id);
+	EQUAL(0xAB12u, user_id);
+	EQUAL(true, partial);
+	EQUAL(true, result);
+	static const char d3[] = "dyplo_wrapper;PARTIAL=FALSE;UserID=0x98765432";
+	result = dyplo::HardwareContext::parseDescriptionTag(d3, sizeof(d3), &partial, &user_id);
+	EQUAL(0x98765432, user_id);
+	EQUAL(false, partial);
+	EQUAL(true, result);
+	static const char d4[] = "dyplo_wrapper;PARTIAL=TRUE\0;NoUserID=42";
+	result = dyplo::HardwareContext::parseDescriptionTag(d4, sizeof(d4), &partial, &user_id);
+	EQUAL(true, partial);
+	EQUAL(false, result);
+	EQUAL(0x98765432, user_id);
+	/* user_id may be null, don't crash */
+	result = dyplo::HardwareContext::parseDescriptionTag(d3, sizeof(d3), &partial, NULL);
+	EQUAL(false, partial);
+	EQUAL(true, result);
 }
 
 TEST(hardware_programmer, program_mode)
