@@ -256,7 +256,7 @@ namespace dyplo
 		return (value != '0');
 	}
 
-	unsigned short parse_u16(unsigned char* data)
+	static unsigned short parse_u16(const unsigned char* data)
 	{
 		return (data[0] << 8) | data[1];
 	}
@@ -291,7 +291,7 @@ namespace dyplo
 			(buffer[13] == 'a'))
 		{
 			/* It's a bitstream, convert and flash */
-			unsigned char* end = &buffer[bytes];
+			const unsigned char* end = &buffer[bytes];
 			unsigned char* data = &buffer[13];
 			/* Browse through tag/value pairs looking for the "e" */
 			while (*data != 'e')
