@@ -96,6 +96,7 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_BACKPLANE_STATUS	0x08
 #define DYPLO_IOC_BACKPLANE_DISABLE	0x09
 #define DYPLO_IOC_BACKPLANE_ENABLE	0x0A
+#define DYPLO_IOC_ICAP_INDEX_QUERY	0x0B
 #define DYPLO_IOC_RESET_FIFO_WRITE	0x0C
 #define DYPLO_IOC_RESET_FIFO_READ	0x0D
 #define DYPLO_IOC_TRESHOLD_QUERY	0x10
@@ -143,6 +144,8 @@ struct dyplo_dma_configuration_req {
  * you want to replace a node using partial configuration. Operations are atomic. */
 #define DYPLO_IOCTBACKPLANE_ENABLE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_BACKPLANE_ENABLE)
 #define DYPLO_IOCTBACKPLANE_DISABLE  _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_BACKPLANE_DISABLE)
+/* Get ICAP index. Returns negative ENODEV if no ICAP available */
+#define DYPLO_IOCQICAP_INDEX	_IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ICAP_INDEX_QUERY)
 /* Reset FIFO data (i.e. throw it away). Can be applied to config
  * nodes to reset its incoming fifos (argument is bitmask for queues to
  * reset), or to a CPU read/write fifo (argument ignored). */
@@ -223,6 +226,19 @@ namespace dyplo
 		std::ostringstream name;
 		name << prefix << "d" << index;
 		return ::open(name.str().c_str(), access);
+	}
+
+	int HardwareContext::openAvailableDMA(int access)
+	{
+		for (int index = 0; index < 31; ++index)
+		{
+			int result = openDMA(index, access);
+			if (result != -1)
+				return result;
+			if (errno != EBUSY)
+				throw IOException();
+		}
+		throw IOException(ENODEV);
 	}
 
 	int HardwareContext::openConfig(int index, int access)
@@ -610,6 +626,15 @@ namespace dyplo
 		return data;
 	}
 
+	int HardwareControl::getIcapNodeIndex()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCQICAP_INDEX);
+		if ((result < 0) && (result != -ENODEV))
+			throw IOException(__func__);
+		return result;
+	}
+
+
 	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)
 	{
 		int result = ::ioctl(file_descriptor, DYPLO_IOCRESET_FIFO_WRITE, mask);
@@ -840,6 +865,24 @@ namespace dyplo
 		}
 	}
 
+	void HardwareDMAFifo::flush()
+	{
+		std::vector<Block>::iterator current = blocks_head;
+		do
+		{
+			Block* block = &(*blocks_head);
+			if (block->state)
+			{
+				int status = ::ioctl(handle, DYPLO_IOCDMABLOCK_DEQUEUE, block);
+				if (status < 0)
+					throw IOException("DYPLO_IOCDMABLOCK_DEQUEUE");
+			}
+			++blocks_head;
+			if (blocks_head == blocks.end())
+				blocks_head = blocks.begin();
+		} while (blocks_head != current);
+	}
+
 	void HardwareDMAFifo::resize(unsigned int number_of_blocks, unsigned int blocksize)
 	{
 		blocks.resize(number_of_blocks);
@@ -894,5 +937,49 @@ namespace dyplo
 	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs)
 	{
 		return !memcmp(&lhs, &rhs, sizeof(lhs));
+	}
+
+	static const unsigned int programmer_blocksize = 65536;
+	static const unsigned int programmer_numblocks = 2;
+	HardwareProgrammer::HardwareProgrammer(HardwareContext& _context):
+		HardwareControl(_context),
+		context(_context),
+		writer(_context.openAvailableDMA(O_RDWR))
+	{
+		int icap = getIcapNodeIndex();
+		if (icap < 0)
+			throw IOException("No ICAP", icap);
+		writer.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
+			programmer_blocksize, programmer_numblocks, false);
+		writer.addRouteTo(icap);
+	}
+
+	HardwareProgrammer::~HardwareProgrammer()
+	{
+		writer.flush();
+	}
+
+	unsigned int HardwareProgrammer::fromFile(const char *filename)
+	{
+		File input(filename, O_RDONLY);
+		size_t total_read = 0;
+		for (;;)
+		{
+			HardwareDMAFifo::Block *block = writer.dequeue();
+			ssize_t bytes = input.read_all(block->data, block->size);
+			total_read += bytes;
+			/* Workaround for DMA node only supporting 64-bit writes */
+			if (bytes % 8)
+			{
+				if (bytes % 8 <= 4) /* Add a NOP instruction */
+					((unsigned int*)((char*)block->data + (bytes & 0xFFFFFFF8)))[1] = 0x20000000U;
+				bytes = (bytes + 7) & 0xFFFFFFF8U;
+			}
+			block->bytes_used = bytes;
+			writer.enqueue(block);
+			if (bytes < block->size)
+				break;
+		}
+		return total_read;
 	}
 }

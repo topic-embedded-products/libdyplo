@@ -53,6 +53,7 @@ namespace dyplo
 		/* Use HardwareControl as more convenient access */
 		int openControl(int access);
 		int openDMA(int index, int access);
+		int openAvailableDMA(int access);
 
 		/* Program device using a partial or full bitstream */
 		static void setProgramMode(bool is_partial_bitstream);
@@ -106,6 +107,9 @@ namespace dyplo
 		bool isNodeEnabled(int node) { return (getEnabledNodes() & (1<<node)) != 0; }
 		void enableNode(int node) { enableNodes(1<<node); }
 		void disableNode(int node) { disableNodes(1<<node); }
+
+		/* Retrieve ICAP node index. Negative means there is none. */
+		int getIcapNodeIndex();
 	};
 
 	class HardwareConfig: public File
@@ -185,6 +189,8 @@ namespace dyplo
 		/* Send block to device. The block should have been obtained
 		 * using dequeue. Does not block. */
 		void enqueue(Block* block);
+		/* Wait until all blocks have been processed in hardware. */
+		void flush();
 
 		void standaloneStart(bool direction_from_logic);
 		void standaloneStop(bool direction_from_logic);
@@ -218,4 +224,14 @@ namespace dyplo
 	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs);
 	inline bool operator!=(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs) {return !(lhs == rhs);}
 
+	class HardwareProgrammer: public HardwareControl
+	{
+	protected:
+		HardwareContext& context;
+		HardwareDMAFifo writer;
+	public:
+		HardwareProgrammer(HardwareContext& context);
+		~HardwareProgrammer();
+		unsigned int fromFile(const char *filename);
+	};
 }

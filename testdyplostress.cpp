@@ -162,15 +162,7 @@ struct Stress
 
 	int openAvailableDMA(int access)
 	{
-		for (int index = 0; index < 4; ++index)
-		{
-			int result = context.openDMA(index, access);
-			if (result != -1)
-				return result;
-			if (errno != EBUSY)
-				throw IOException();
-		}
-		throw IOException(ENODEV);
+		return context.openAvailableDMA(access);
 	}
 
 	~Stress()

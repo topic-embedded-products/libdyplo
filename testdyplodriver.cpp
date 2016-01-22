@@ -2278,5 +2278,69 @@ TEST(hardware_driver, z_static_id)
 	dyplo::HardwareContext context;
 	dyplo::HardwareControl ctrl(context);
 	unsigned int id = ctrl.readDyploStaticID();
-	std::cout << "(0x" << std::hex << id << ") ";
+	std::cout << "(0x" << std::hex << id  << std::dec << ") ";
+}
+
+TEST(hardware_driver_ctx, a_program_icap)
+{
+	dyplo::HardwareControl ctrl(context);
+	unsigned int icap_index = ctrl.getIcapNodeIndex(); // TODO: Fetch from logic
+	dyplo::HardwareConfig icap = context.openConfig(icap_index, O_RDWR);
+	EQUAL(icap_index, icap.getNodeIndex());
+	dyplo::HardwareFifo fifo(context.openFifo(0, O_WRONLY));
+	fifo.addRouteTo(icap_index);
+	std::vector<unsigned char> adders;
+	/* First program "testNode" using the classic method */
+	context.setProgramMode(true); /* partial */
+	for (unsigned char id = 0; id < 32; ++id)
+	{
+		std::string filename =
+			context.findPartition("testNode", id);
+		if (!filename.empty())
+		{
+			ctrl.disableNode(id);
+			context.program(filename.c_str());
+		}
+	}
+	/* Program "adder" using the ICAP method */
+	{
+		dyplo::HardwareProgrammer programmer(context);
+		for (unsigned char id = 0; id < 32; ++id)
+		{
+			std::string filename =
+				context.findPartition("adder", id);
+			if (!filename.empty())
+			{
+				ctrl.disableNode(id);
+				unsigned int bytes = programmer.fromFile(filename.c_str());
+				CHECK(bytes > 0);
+				adders.push_back(id);
+			}
+		}
+	}
+	dyplo::HardwareFifo to_adder = context.openFifo(1, O_WRONLY);
+	dyplo::HardwareFifo from_adder = context.openFifo(1, O_RDONLY);
+	for (std::vector<unsigned char>::const_iterator it = adders.begin();
+		it != adders.end(); ++it)
+	{
+		dyplo::HardwareConfig adder = context.openConfig(*it, O_RDWR);
+		adder.enableNode();
+		/* Test that the partial really is an adder now */
+		static const int hdl_configuration_blob[] = {
+			1234, -1243, 1000001, 10001
+		};
+		adder.write(hdl_configuration_blob, sizeof(hdl_configuration_blob));
+		int data[] = {42 ,0};
+		int result[2];
+		to_adder.addRouteTo(adder.getNodeIndex());
+		from_adder.addRouteFrom(adder.getNodeIndex());
+		to_adder.write(data, sizeof(data));
+		if (!from_adder.poll_for_incoming_data(1)) {
+			std::cout << " at " << (int)*it;
+			FAIL("Timeout reading data, programming failed");
+		}
+		from_adder.read(result, sizeof(result));
+		EQUAL(data[0] + 1234, result[0]);
+		EQUAL(data[1] + 1234, result[1]);
+	}
 }
