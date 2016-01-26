@@ -136,9 +136,15 @@ namespace dyplo
 			OutputElement *dest;
 			for(;;)
 			{
-				unsigned int count = input->begin_read(src, blocksize);
+#ifdef _DEBUG
+				unsigned int count =
+#endif
+					input->begin_read(src, blocksize);
 				DEBUG_ASSERT(count >= blocksize, "invalid value from begin_read");
-				count = output->begin_write(dest, blocksize);
+#ifdef _DEBUG
+				count =
+#endif
+					output->begin_write(dest, blocksize);
 				DEBUG_ASSERT(count >= blocksize, "invalid value from begin_write");
 				ProcessBlockFunction(dest, src);
 				output->end_write(blocksize);

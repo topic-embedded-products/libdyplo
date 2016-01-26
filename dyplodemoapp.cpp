@@ -97,14 +97,16 @@ class ThreadedProcessSink
 
 		void* process()
 		{
-			unsigned int count;
 			InputElement *src;
 
 			try
 			{
 				for(;;)
 				{
-					count = input->begin_read(src, blocksize);
+#ifdef _DEBUG
+					unsigned int count =
+#endif
+						input->begin_read(src, blocksize);
 					DEBUG_ASSERT(count >= blocksize, "invalid value from begin_read");
 					ProcessItemFunction(src);
 					input->end_read(blocksize);

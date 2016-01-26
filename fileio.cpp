@@ -62,7 +62,7 @@ namespace dyplo
 			count -= result;
 			if (count == 0)
 				return bytes;
-			buf += result;
+			buf = ((char*)buf) + result;
 		}
 	}
 

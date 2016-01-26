@@ -349,8 +349,8 @@ TEST(a_file_queue, write_flush_all)
 	dyplo::FileInputQueue<char> input(scheduler, p.read_handle(), read_buffer_count);
 	char* data = NULL;
 	unsigned int count;
-	int num_written = 0;
-	int num_read = 0;
+	unsigned int num_written = 0;
+	unsigned int num_read = 0;
 
 	while(num_written < known_os_buffer_size)
 	{
@@ -390,7 +390,6 @@ TEST(a_file_queue, read_carry_only)
 	dyplo::FileInputQueue<int> input(scheduler, p.read_handle(), read_buffer_count);
 	int* data = NULL;
 	unsigned int count;
-	int num_read = 0;
 	int counter = 1;
 	unsigned int num_written = 0;
 
