@@ -111,7 +111,7 @@ namespace dyplo
 			m_size -= count;
 			m_scheduler.trigger_not_full();
 		}
-		
+
 		void wait_empty()
 		{
 			ScopedLock<Scheduler> lock(m_scheduler);
@@ -157,7 +157,7 @@ namespace dyplo
 			ScopedLock<Scheduler> lock(m_scheduler);
 			m_scheduler.interrupt_not_full();
 		}
-		
+
 		void resume_read()
 		{
 			ScopedLock<Scheduler> lock(m_scheduler);

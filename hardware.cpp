@@ -256,7 +256,7 @@ namespace dyplo
 			throw TruncatedFileException();
 		return (value != '0');
 	}
-	
+
 	const char* HardwareContext::getDefaultProgramDestination()
 	{
 		return XILINX_XDEVCFG;
@@ -807,7 +807,7 @@ namespace dyplo
 	{
 		dispose();
 	}
-	
+
 	void HardwareDMAFifo::dispose()
 	{
 		unmap();
@@ -839,7 +839,7 @@ namespace dyplo
 			throw IOException("DYPLO_IOCDMABLOCK_ENQUEUE");
 		}
 	}
-	
+
 	void HardwareDMAFifo::resize(unsigned int number_of_blocks, unsigned int blocksize)
 	{
 		blocks.resize(number_of_blocks);

@@ -44,7 +44,7 @@ namespace dyplo
 	{
 		return "End of output file";
 	}
-	
+
 	IOException::IOException():
 		m_errno(errno)
 	{
@@ -76,19 +76,19 @@ namespace dyplo
 		}
 		return buffer.c_str();
 	}
-	
+
 	int set_non_blocking(int file_handle)
 	{
 		int flags = fcntl(file_handle, F_GETFL, 0);
 		return fcntl(file_handle, F_SETFL, flags | O_NONBLOCK);
 	}
-	
+
 	FilePollScheduler::FilePollScheduler():
 		m_interrupted(false)
 	{
 		set_non_blocking(m_internal_pipe.read_handle());
 	}
-	
+
 	void FilePollScheduler::wait_readable(int filehandle)
 	{
 		if (m_interrupted)
@@ -104,7 +104,7 @@ namespace dyplo
 		if (fds[1].revents)
 			throw InterruptedException();
 	}
-	
+
 	void FilePollScheduler::wait_writeable(int filehandle)
 	{
 		if (m_interrupted)
@@ -120,7 +120,7 @@ namespace dyplo
 		if (fds[1].revents)
 			throw InterruptedException();
 	}
-	
+
 	void FilePollScheduler::interrupt()
 	{
 		char dummy = 'q';

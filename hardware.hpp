@@ -34,7 +34,7 @@
 #include "fileio.hpp"
 
 namespace dyplo
-{	
+{
 	class ProgramTagCallback
 	{
 	public:
@@ -141,7 +141,7 @@ namespace dyplo
 		void setUserSignal(int usersignal);
 		int getUserSignal();
 	};
-	
+
 	class HardwareDMAFifo: public HardwareFifo
 	{
 	public:
@@ -176,7 +176,7 @@ namespace dyplo
 		/* Explicitly dispose of allocated DMA buffers. Also called from
 		 * destructor */
 		void dispose();
-		
+
 		/* Get a block from the queue. In non-blocking mode, returns
 		 * NULL when it would block. When writing, this is the first
 		 * thing to do. Only valid for MODE_COHERENT and MODE_STREAMING

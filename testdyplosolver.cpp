@@ -36,7 +36,7 @@ class Partitioner
 public:
 	std::vector<unsigned int> function_masks;
 	std::vector<unsigned int> solution;
-	
+
 	int solve(unsigned int available_mask)
 	{
 		solution.resize(function_masks.size());
@@ -75,14 +75,14 @@ public:
 	std::vector<unsigned int> function_masks;
 	std::vector<unsigned int> function_scores;
 	std::vector<int> solution;
-	
+
 	unsigned int solve(unsigned int available_mask)
 	{
 		solution.assign(function_masks.size(), -1);
 		best_score.assign(function_masks.size(), 0);
 		return recurse(0, available_mask, 0);
 	}
-	
+
 	unsigned int calc_max_attainable_score(unsigned int function_index, unsigned int mask)
 	{
 		unsigned int result = 0;
@@ -94,7 +94,7 @@ public:
 		}
 		return result;
 	}
-	
+
 	void check_valid()
 	{
 		const unsigned int num_functions = solution.size();
@@ -141,13 +141,13 @@ protected:
 				max_score = r;
 			}
 		}
-		
+
 		if (max_score > best_score[function_index])
 		{
 			best_score[function_index] = max_score;
 			solution[function_index] = local_solution;
 		}
-	
+
 		return max_score;
 	}
 };
@@ -157,11 +157,11 @@ struct partition_solver {};
 TEST(partition_solver, solve_configuration)
 {
 	Partitioner p;
-	
+
 	p.function_masks.push_back(0b110);
 	p.function_masks.push_back(0b011);
 	p.function_masks.push_back(0b110);
-	
+
 	YAFFUT_CHECK(p.solve(0b111) >= 0);
 	EQUAL(1u, p.solution[0]);
 	EQUAL(0u, p.solution[1]);
@@ -229,12 +229,12 @@ TEST(partition_solver, solve_with_weight)
 	p.function_scores.push_back(1);
 	p.function_scores.push_back(2);
 	p.function_scores.push_back(3);
-	
+
 	EQUAL(3u, p.calc_max_attainable_score(0, 0b011));
 	EQUAL(5u, p.calc_max_attainable_score(0, 0b110));
 	EQUAL(5u, p.calc_max_attainable_score(1, 0b110));
 	EQUAL(2u, p.calc_max_attainable_score(1, 0b011));
-	
+
 	unsigned int r = p.solve(0b111);
 	EQUAL(6U, p.calc_max_attainable_score(0, 0b111));
 	EQUAL(5U, p.calc_max_attainable_score(1, 0b111));
@@ -261,7 +261,7 @@ TEST(partition_solver, solve_with_weight)
 	EQUAL(0, p.solution[1]);
 	EQUAL(1, p.solution[2]);
 	p.check_valid();
-	
+
 	EQUAL(6u, p.calc_max_attainable_score(0, 0b011));
 
 	/* Create a large search space. The actual test here is that this
@@ -273,7 +273,7 @@ TEST(partition_solver, solve_with_weight)
 	p.function_scores.assign(functions, 1);
 	EQUAL(std::min(functions, partitions), p.solve((1 << partitions) - 1));
 	p.check_valid();
-	
+
 	p.function_masks[functions-1] = 0;
 	EQUAL(std::min(functions-1, partitions), p.solve((1 << partitions) - 1));
 	p.check_valid();

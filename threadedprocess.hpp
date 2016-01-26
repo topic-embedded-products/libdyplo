@@ -95,7 +95,7 @@ namespace dyplo
 			if (input && output)
 				start();
 		}
-		
+
 		void process()
 		{
 			try
@@ -120,7 +120,7 @@ namespace dyplo
 			return 0;
 		}
 	};
-	
+
 	template <class InputQueueClass, class OutputQueueClass,
 		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
 		int blocksize = 1
@@ -146,8 +146,8 @@ namespace dyplo
 			}
 		}
 	};
-	
-	
+
+
 	template <class InputQueueClass, class OutputQueueClass,
 		void(*ProcessBlockFunction)(typename OutputQueueClass::Element*, typename InputQueueClass::Element*),
 		int blocksize = 1>

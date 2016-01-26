@@ -40,7 +40,7 @@ namespace dyplo
 		/* Use a small thread size for Dyplo-managed threads. The system
 		 * default is usually 8MB, resulting in a high load on VM */
 		static const int default_stack_size = 128 * 1024;
-	
+
 		Thread():
 			m_thread(pthread_self())
 		{

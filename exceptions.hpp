@@ -37,13 +37,13 @@ namespace dyplo
 	public:
 		virtual const char* what() const throw();
 	};
-	
+
 	class EndOfFileException: public std::exception
 	{
 	public:
 		virtual const char* what() const throw();
 	};
-	
+
 	class EndOfInputException: public EndOfFileException
 	{
 	public:
@@ -55,7 +55,7 @@ namespace dyplo
 	public:
 		virtual const char* what() const throw();
 	};
-	
+
 	class TruncatedFileException: public EndOfFileException
 	{
 	public:

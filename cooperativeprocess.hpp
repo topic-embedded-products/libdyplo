@@ -47,7 +47,7 @@ namespace dyplo
 			input(NULL),
 			output(NULL)
 		{}
-		
+
 		~CooperativeProcessBase()
 		{
 			/* Inform downstream and upstream elements that we
@@ -101,7 +101,7 @@ namespace dyplo
 				Base::input->end_read(blocksize);
 			}
 		}
-		
+
 		~CooperativeProcess()
 		{
 			Base::interrupt();

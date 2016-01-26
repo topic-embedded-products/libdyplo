@@ -164,7 +164,7 @@ int main(int argc, char** argv)
 	proc_b.set_input(&output_from_a);
 	proc_b.set_output(&output_from_b);
 	proc_d.set_input(&output_from_c);
-	
+
 	for(;;)
 	{
 		std::string line;

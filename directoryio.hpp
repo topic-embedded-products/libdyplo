@@ -44,12 +44,12 @@ namespace dyplo
 			if (!handle)
 				throw dyplo::IOException(path);
 		}
-		
+
 		~DirectoryListing()
 		{
 			::closedir(handle);
 		}
-	
+
 		struct dirent* next()
 		{
 			return readdir(handle);

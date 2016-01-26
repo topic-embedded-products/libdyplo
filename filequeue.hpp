@@ -41,7 +41,7 @@
 namespace dyplo
 {
 	int set_non_blocking(int file_handle);
-	
+
 	struct Pipe
 	{
 		int m_handles[2];
@@ -93,7 +93,7 @@ namespace dyplo
 		{
 			delete [] m_buff;
 		}
-		
+
 		/* Returns whether caller needs to wait for more */
 		bool write_buffer()
 		{
@@ -167,7 +167,7 @@ namespace dyplo
 		{
 			m_scheduler.interrupt();
 		}
-		
+
 		FilePollScheduler& get_scheduler() { return m_scheduler; }
 	protected:
 		T* m_buff;
@@ -266,7 +266,7 @@ namespace dyplo
 				m_size = 0;
 			}
 		}
-		
+
 		void interrupt_read()
 		{
 			m_scheduler.interrupt();

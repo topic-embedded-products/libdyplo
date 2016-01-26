@@ -54,7 +54,7 @@ public:
 	}
 };
 
-static const unsigned char invalid_bitstream[64] = 
+static const unsigned char invalid_bitstream[64] =
 	{0}; /* Not valid for any type */
 static const unsigned char valid_bin_bitstream[128] =
 	{0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4, 5, 6, 7, 8}; /* Valid binary bitstream */
@@ -84,7 +84,7 @@ public:
 		CHECK(!tags.empty());
 		std::string v = tags['a'];
 		std::cout << v.size() << ':';
-		
+
 		EQUAL(std::string("dyplo_wrapper;UserID=0XFFFFFFFF\0", 32), tags['a']);
 		EQUAL(std::string("7z020clg484\0", 12), tags['b']);
 		EQUAL(std::string("2013/08/30\0", 11), tags['c']);

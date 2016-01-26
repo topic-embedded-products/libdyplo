@@ -255,14 +255,14 @@ TEST(mixed_scheduler, file_queue_in_chain)
 		1> p1;
 	dyplo::ThreadedProcess<
 		typeof(input_from_file), typeof(output_from_p2),
-		process_block_add_constant<int, 7, 1> 
+		process_block_add_constant<int, 7, 1>
 		> p2;
-	
+
 	p1.set_input(&input_to_p1);
 	p1.set_output(&output_to_file);
 	p2.set_input(&input_from_file);
 	p2.set_output(&output_from_p2);
-	
+
 	input_to_p1.push_one(10);
 	input_to_p1.push_one(20);
 	YAFFUT_EQUAL(19, output_from_p2.pop_one());

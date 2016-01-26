@@ -45,7 +45,7 @@ struct StressNodeLane /* At offset (lane * 0x40) + 0x4 */
 	unsigned int burst_length;
 	unsigned int output_stepsize;
 	unsigned int input_stepsize;
-	
+
 	StressNodeLane(unsigned int a_burst_interval, unsigned int a_burst_length = 1, unsigned int stepsize = 1):
 		burst_interval(a_burst_interval),
 		burst_length(a_burst_length),
@@ -212,7 +212,7 @@ TEST(Stress, a_to_cpu)
 				{
 					std::ostringstream msg;
 					msg << "Node " << (it - nodes.begin())
-						<< " expected=" << value << " data=" << data[i] << " " << data[i+1]; 
+						<< " expected=" << value << " data=" << data[i] << " " << data[i+1];
 					FAIL(msg.str());
 				}
 				++value;
@@ -325,7 +325,7 @@ TEST(Stress, d_dma_from_logic)
 				{
 					std::ostringstream msg;
 					msg << "Node " << (it - nodes.begin())
-						<< " expected=" << value << " data=" << data[i] << " " << data[i+1]; 
+						<< " expected=" << value << " data=" << data[i] << " " << data[i+1];
 					FAIL(msg.str());
 				}
 				++value;

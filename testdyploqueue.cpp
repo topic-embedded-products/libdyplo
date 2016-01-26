@@ -112,7 +112,7 @@ TEST(a_single_queue, basic)
 {
 	dyplo::SingleElementQueue<int, dyplo::NoopScheduler> q;
 	int* data = NULL;
-	
+
 	YAFFUT_CHECK(q.empty());
 	YAFFUT_EQUAL(1u, q.begin_write(data, 1));
 	*data = 42;
@@ -129,7 +129,7 @@ TEST(a_fixed_memory_queue, with_strings)
 {
 	dyplo::FixedMemoryQueue<std::string, dyplo::NoopScheduler> q(5);
 	std::string *data;
-	
+
 	for (int repeat = 2; repeat !=0; --repeat)
 	{
 		YAFFUT_CHECK(q.empty());
@@ -140,7 +140,7 @@ TEST(a_fixed_memory_queue, with_strings)
 		data[3] = "Four";
 		q.end_write(4);
 		q.push_one("Five");
-		
+
 		YAFFUT_EQUAL(std::string("One"), q.pop_one());
 		YAFFUT_EQUAL(4u, q.begin_read(data, 4));
 		YAFFUT_EQUAL("Two", data[0]);
@@ -210,7 +210,7 @@ TEST(a_file_queue, blocking)
 	for (int i = 0; i < 10; ++i)
 		data[i] = i * 10;
 	output.end_write(10);
-	
+
 	count = input.begin_read(data, 5);
 	YAFFUT_EQUAL(5u, count);
 	YAFFUT_CHECK(data != NULL);
@@ -252,7 +252,7 @@ TEST(a_file_queue, non_blocking)
 	count = input.begin_read(data, 5);
 	YAFFUT_EQUAL(10u, count); /* Should read more than requested */
 	input.end_read(count);
-	
+
 	int written = 0;
 	while(true)
 	{
@@ -300,10 +300,10 @@ TEST(a_file_queue, interrupt_resume)
 	count = input.begin_read(data, 5);
 	YAFFUT_EQUAL(10u, count); /* Should read more than requested */
 	input.end_read(count);
-	
+
 	input.interrupt_read();
 	scheduler.reset();
-	
+
 	int written = 0;
 	while(true)
 	{
@@ -315,10 +315,10 @@ TEST(a_file_queue, interrupt_resume)
 		output.end_write(10);
 		written += 10;
 	}
-	
+
 	output.interrupt_write();
 	scheduler.reset();
-	
+
 	while (written > 10)
 	{
 		/* Empty the OS fifo */
@@ -404,11 +404,11 @@ TEST(a_file_queue, read_carry_only)
 		output.end_write(count);
 		num_written += count;
 	}
-	
+
 	counter = 1;
 	count = input.begin_read(data, 1024);
 	CHECK(count >= 1024);
-	for (unsigned int i=0; i<100; ++i) 
+	for (unsigned int i=0; i<100; ++i)
 	{
 		EQUAL(counter, data[i]);
 		++counter;
@@ -416,7 +416,7 @@ TEST(a_file_queue, read_carry_only)
 	input.end_read(100);
 	count = input.begin_read(data, 0);
 	CHECK(count >= 924);
-	for (unsigned int i=0; i<100; ++i) 
+	for (unsigned int i=0; i<100; ++i)
 	{
 		EQUAL(counter, data[i]);
 		++counter;
@@ -424,7 +424,7 @@ TEST(a_file_queue, read_carry_only)
 	input.end_read(100);
 	count = input.begin_read(data, 0);
 	CHECK(count >= 824);
-	for (unsigned int i=0; i<100; ++i) 
+	for (unsigned int i=0; i<100; ++i)
 	{
 		EQUAL(counter, data[i]);
 		++counter;
@@ -432,7 +432,7 @@ TEST(a_file_queue, read_carry_only)
 	input.end_read(100);
 	count = input.begin_read(data, 1024);
 	CHECK(count >= 1024);
-	for (unsigned int i=0; i<count; ++i) 
+	for (unsigned int i=0; i<count; ++i)
 	{
 		EQUAL(counter, data[i]);
 		++counter;

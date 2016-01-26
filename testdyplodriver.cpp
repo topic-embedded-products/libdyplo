@@ -1556,7 +1556,7 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 			if (++buffers_sent > 256)
 				FAIL("Outgoing DMA keeps accepting data");
 		} while (dma0w.poll_for_outgoing_data(0));
-		
+
 		/* Must be able to send >1 full buffer without blocking */
 		CHECK(buffers_sent > 1);
 		/* Keep sending until we get an EAGAIN error */
@@ -1574,7 +1574,7 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 				break;
 			}
 		}
-		
+
 		unsigned int total_read = 0;
 		while (total_read != total_written) {
 			/* Data must arrive at incoming node */
