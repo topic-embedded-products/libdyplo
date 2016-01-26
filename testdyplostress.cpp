@@ -118,32 +118,37 @@ struct Stress
 		control(context)
 	{
 		unsigned int candidates = context.getAvailablePartitions(function_name);
-		if (candidates == 0) FAIL("No testNode available");
-		unsigned int mask = 1;
-		for (int id = 1; id < 32; ++id)
+		if (candidates == 0)
+			FAIL("No testNode available");
+		control.disableNodes(candidates);
 		{
-			mask <<= 1;
-			if ((mask & candidates) != 0)
+			dyplo::HardwareProgrammer programmer(context);
+			unsigned int mask = 1;
+			for (int id = 1; id < 32; ++id)
 			{
-				int handle = context.openConfig(id, O_RDWR);
-				if (handle == -1)
+				mask <<= 1;
+				if ((mask & candidates) != 0)
 				{
-					if (errno != EBUSY) /* Non existent? Bail out, last node */
-						break;
-				}
-				else
-				{
-					control.disableNode(id);
-					std::string filename =
-							context.findPartition(function_name, id);
-					context.setProgramMode(true); /* partial */
-					context.program(filename.c_str());
-					control.enableNode(id);
-					//std::cerr << __func__ << " handle=" << handle << " id=" << id << std::endl;
-					nodes.push_back(new StressNode(id, handle));
+					int handle = context.openConfig(id, O_RDWR);
+					if (handle == -1)
+					{
+						if (errno != EBUSY) /* Non existent? Bail out, last node */
+							break;
+					}
+					else
+					{
+						std::string filename =
+								context.findPartition(function_name, id);
+						programmer.fromFile(filename.c_str());
+						//std::cerr << __func__ << " handle=" << handle << " id=" << id << std::endl;
+						nodes.push_back(new StressNode(id, handle));
+					}
 				}
 			}
 		}
+		/* Enabling nodes must be postponed until AFTER closing the
+		 * programmer object. */
+		control.enableNodes(candidates);
 		std::cout << " (" << nodes.size() << " nodes)";
 	}
 
