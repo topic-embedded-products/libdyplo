@@ -2289,22 +2289,28 @@ TEST(hardware_driver_ctx, a_program_icap)
 	EQUAL(icap_index, icap.getNodeIndex());
 	dyplo::HardwareFifo fifo(context.openFifo(0, O_WRONLY));
 	fifo.addRouteTo(icap_index);
-	std::vector<unsigned char> adders;
-	/* First program "testNode" using the classic method */
-	context.setProgramMode(true); /* partial */
-	for (unsigned char id = 0; id < 32; ++id)
+	std::vector<unsigned char> pr_nodes;
+	/* First program "testNode" using ICAP */
 	{
-		std::string filename =
-			context.findPartition("testNode", id);
-		if (!filename.empty())
+		dyplo::HardwareProgrammer programmer(context, ctrl);
+		for (unsigned char id = 0; id < 32; ++id)
 		{
-			ctrl.disableNode(id);
-			context.program(filename.c_str());
+			std::string filename =
+				context.findPartition("testNode", id);
+			if (!filename.empty())
+			{
+				ctrl.disableNode(id);
+				unsigned int bytes = programmer.fromFile(filename.c_str());
+				CHECK(bytes > 0);
+				pr_nodes.push_back(id);
+			}
 		}
 	}
+	/* TODO: Check that the nodes are really testNode type? */
+	pr_nodes.clear();
 	/* Program "adder" using the ICAP method */
 	{
-		dyplo::HardwareProgrammer programmer(context);
+		dyplo::HardwareProgrammer programmer(context, ctrl);
 		for (unsigned char id = 0; id < 32; ++id)
 		{
 			std::string filename =
@@ -2314,14 +2320,14 @@ TEST(hardware_driver_ctx, a_program_icap)
 				ctrl.disableNode(id);
 				unsigned int bytes = programmer.fromFile(filename.c_str());
 				CHECK(bytes > 0);
-				adders.push_back(id);
+				pr_nodes.push_back(id);
 			}
 		}
 	}
 	dyplo::HardwareFifo to_adder = context.openFifo(1, O_WRONLY);
 	dyplo::HardwareFifo from_adder = context.openFifo(1, O_RDONLY);
-	for (std::vector<unsigned char>::const_iterator it = adders.begin();
-		it != adders.end(); ++it)
+	for (std::vector<unsigned char>::const_iterator it = pr_nodes.begin();
+		it != pr_nodes.end(); ++it)
 	{
 		dyplo::HardwareConfig adder = context.openConfig(*it, O_RDWR);
 		adder.enableNode();

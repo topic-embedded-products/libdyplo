@@ -806,12 +806,10 @@ namespace dyplo
 
 	static const unsigned int programmer_blocksize = 65536;
 	static const unsigned int programmer_numblocks = 2;
-	HardwareProgrammer::HardwareProgrammer(HardwareContext& _context):
-		HardwareControl(_context),
-		context(_context),
-		writer(_context.openAvailableDMA(O_RDWR))
+	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control):
+		writer(context.openAvailableDMA(O_RDWR))
 	{
-		int icap = getIcapNodeIndex();
+		int icap = control.getIcapNodeIndex();
 		if (icap < 0)
 			throw IOException("No ICAP", icap);
 		writer.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,

@@ -122,7 +122,7 @@ struct Stress
 			FAIL("No testNode available");
 		control.disableNodes(candidates);
 		{
-			dyplo::HardwareProgrammer programmer(context);
+			dyplo::HardwareProgrammer programmer(context, control);
 			unsigned int mask = 1;
 			for (int id = 1; id < 32; ++id)
 			{

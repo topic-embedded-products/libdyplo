@@ -224,13 +224,12 @@ namespace dyplo
 	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs);
 	inline bool operator!=(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs) {return !(lhs == rhs);}
 
-	class HardwareProgrammer: public HardwareControl
+	class HardwareProgrammer
 	{
 	protected:
-		HardwareContext& context;
 		HardwareDMAFifo writer;
 	public:
-		HardwareProgrammer(HardwareContext& context);
+		HardwareProgrammer(HardwareContext& context, HardwareControl& control);
 		~HardwareProgrammer();
 		unsigned int fromFile(const char *filename);
 	};
