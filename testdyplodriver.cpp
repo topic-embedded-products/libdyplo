@@ -167,21 +167,25 @@ struct hardware_driver_hdl: public hardware_driver_ctx
 	hardware_driver_hdl()
 	{
 		dyplo::HardwareControl ctrl(context);
-		context.setProgramMode(true); /* partial */
-		for (unsigned char id = 1; id < 32; ++id)
 		{
-			std::string filename =
-				context.findPartition("adder", id);
-			if (!filename.empty())
+			dyplo::HardwareProgrammer programmer(context, ctrl);
+			for (unsigned char id = 1; id < 32; ++id)
 			{
-				ctrl.disableNode(id);
-				context.program(filename.c_str());
-				ctrl.enableNode(id);
-				adders.push_back(id);
-				if (adders.size() >= 2)
-					break; /* Two is enough */
+				std::string filename =
+					context.findPartition("adder", id);
+				if (!filename.empty())
+				{
+					ctrl.disableNode(id);
+					programmer.fromFile(filename.c_str());
+					adders.push_back(id);
+					if (adders.size() >= 2)
+						break; /* Two is enough */
+				}
 			}
 		}
+		for (std::vector<unsigned char>::iterator it = adders.begin();
+			it != adders.end(); ++it)
+			ctrl.enableNode(*it);
 		/* Need at least 2 adders for these tests */
 		CHECK(adders.size() >= 2);
 	}
