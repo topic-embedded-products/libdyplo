@@ -232,5 +232,7 @@ namespace dyplo
 		HardwareProgrammer(HardwareContext& context, HardwareControl& control);
 		~HardwareProgrammer();
 		unsigned int fromFile(const char *filename);
+		/* Flush out queues by sending a string of NOPs */
+		unsigned int sendNOP(unsigned int count);
 	};
 }

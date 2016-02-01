@@ -806,6 +806,8 @@ namespace dyplo
 
 	static const unsigned int programmer_blocksize = 65536;
 	static const unsigned int programmer_numblocks = 2;
+	static const unsigned int icap_nop_instruction = 0x20000000U;
+
 	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control):
 		writer(context.openAvailableDMA(O_RDWR))
 	{
@@ -819,6 +821,7 @@ namespace dyplo
 
 	HardwareProgrammer::~HardwareProgrammer()
 	{
+		/* Wait for all DMA transactions to finish */
 		writer.flush();
 	}
 
@@ -835,7 +838,7 @@ namespace dyplo
 			if (bytes % 8)
 			{
 				if (bytes % 8 <= 4) /* Add a NOP instruction */
-					((unsigned int*)((char*)block->data + (bytes & 0xFFFFFFF8)))[1] = 0x20000000U;
+					((unsigned int*)((char*)block->data + (bytes & 0xFFFFFFF8)))[1] = icap_nop_instruction;
 				bytes = (bytes + 7) & 0xFFFFFFF8U;
 			}
 			block->bytes_used = bytes;
@@ -844,5 +847,27 @@ namespace dyplo
 				break;
 		}
 		return total_read;
+	}
+
+	unsigned int HardwareProgrammer::sendNOP(unsigned int count)
+	{
+		/* Send a block of NOP instructions. This is to flush all
+		 * internal queues, so that any data still in those queues
+		 * has been written to ICAP, and only the NOP commands remain
+		 * in the Dyplo queues. */
+		HardwareDMAFifo::Block *block = writer.dequeue();
+		/* Round up to multiple of 2 */
+		count = (count + 1) & ~1;
+		unsigned int bytes = count * sizeof(unsigned int);
+		if (bytes > block->size) {
+			bytes = block->size;
+			count = bytes / sizeof(unsigned int);
+		}
+		block->bytes_used = bytes;
+		unsigned int *data = (unsigned int*)block->data;
+		for (unsigned int i = 0; i < count; ++i)
+			data[i] = icap_nop_instruction;
+		writer.enqueue(block);
+		return count;
 	}
 }
