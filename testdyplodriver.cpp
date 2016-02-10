@@ -1692,7 +1692,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
 		for (unsigned int i = 0; i < num_blocks; ++i)
 		{
-			const dyplo::HardwareDMAFifo::Block *block = dma0w.at(i);
+			const dyplo::HardwareDMAFifo::Block *block = dma0r.at(i);
 			EQUAL(i, block->id);
 			EQUAL(blocksize, block->size);
 			EQUAL(i * blocksize, block->offset);
