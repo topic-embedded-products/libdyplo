@@ -1924,6 +1924,80 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_3usersignals)
 	}
 }
 
+TEST(hardware_driver_ctx, p_dma_zerocopy_4from_regular_dma)
+{
+	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	static const int dma_index = number_of_dma_nodes / 2;
+	static const unsigned int transfer_mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
+	/* blocksize that is 8-byte aligned but not page aligned */
+	static const unsigned int blocksize = 111 * 104;
+	static const unsigned int num_blocks = 2;
+
+	/* Writing part opens in "standard" DMA mode */
+	dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
+
+	/* Receiving part in block mode */
+	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+	dma0r.reconfigure(transfer_mode, blocksize, num_blocks, true);
+	EQUAL(num_blocks, dma0r.count());
+	dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+	for (unsigned int i = 0; i < num_blocks; ++i)
+	{
+		const dyplo::HardwareDMAFifo::Block *block = dma0r.at(i);
+		EQUAL(i, block->id);
+		CHECK(block->size >= blocksize);
+		CHECK(block->data != NULL);
+	}
+	/* Prime the reader with empty blocks*/
+	for (unsigned int i = 0; i < num_blocks; ++i)
+	{
+		dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
+		CHECK(block != NULL);
+		block->bytes_used = blocksize;
+		dma0r.enqueue(block);
+		CHECK(block->state);
+	}
+	/* Send data... */
+	static const unsigned int num_words = blocksize / sizeof(unsigned int);
+	std::vector<unsigned int> data(num_words);
+	unsigned int write_seed = 10000000;
+	unsigned int read_seed = write_seed;
+	for (unsigned int loop_count = 0; loop_count < 3; ++loop_count)
+	{
+		/* Receiver can buffer num_blocks, and the sender can buffer
+		 * some extra, so this will not block. */
+		for (unsigned int b = 0; b < num_blocks; ++b)
+		{
+			for (unsigned int i = 0; i < num_words; ++i)
+				data[i] = write_seed++;
+			EQUAL(blocksize, dma0w.write(&data[0], blocksize));
+		}
+		/* Read back the data */
+		for (unsigned int i = 0; i < num_blocks; ++i)
+		{
+			dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
+			CHECK(block != NULL);
+			CHECK(!block->state);
+			EQUAL(blocksize, block->bytes_used);
+			unsigned int num_words = block->bytes_used / sizeof(unsigned int);
+			unsigned int* data = (unsigned int*)block->data;
+			for (unsigned int j = 0; j < num_words; ++j)
+			{
+				if (read_seed != data[j])
+				{
+					std::ostringstream msg;
+					msg << "Mismatch at loop_count=" << loop_count << " block=" << i << " index=" << j
+						<< " expect=" << (read_seed) << " result=" << data[j] << "\n";
+					FAIL(msg.str());
+				}
+				++read_seed;
+			}
+			dma0r.enqueue(block);
+			CHECK(block->state);
+		}
+	}
+}
+
 TEST(hardware_driver_ctx, q_dma_invalid_configuration)
 {
 	static const int dma_index = 0;
