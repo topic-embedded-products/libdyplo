@@ -8,6 +8,12 @@ everything.
 It is possible to run parts of the software on a Linux system without
 dyplo hardware. This is being used for unit-testing those components.
 
+When manually building, you'll need a compiler and libtool. If there is
+no "configure" script yet (this is the case if you clone the libdyplo
+repository), you'll need autotools as well. On a standard Ubuntu setup
+the command to get these prerequisites is:
+  sudo apt-get install build-essential autoconf libtool
+
 The project uses autotools, so if you're familiar with that, you may
 already know what to do.
 
@@ -19,7 +25,7 @@ only dependency is pthreads.
 make
 
 Run "./configure --help" to list options. For faster building, supply a
-"-j" parameter to make to use multiple cores.
+"-j" parameter to make to use multiple cores, e.g. "make -j 4".
 
 
 RUNNING TESTS
@@ -31,7 +37,7 @@ make check
 
 If you built for the target system (autotools "--host" can be used to
 quickly cross-compile using a prebuilt toolchain, if you have that),
-you can run both the software only and teh hardware based tests. If
+you can run both the software only and the hardware based tests. If
 you're using the OpenEmbedded recipe, the executables will be in
 a package called "libdyplo-test". Run the following programs to check
 that everything is working. For testdyplodriver to work, you must have
