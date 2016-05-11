@@ -41,6 +41,7 @@
 #include "yaffut.h"
 
 #include <time.h>
+#include <list>
 
 class Stopwatch
 {
@@ -2359,14 +2360,13 @@ TEST(hardware_driver, z_static_id)
 	std::cout << "(0x" << std::hex << id  << std::dec << ") ";
 }
 
-TEST(hardware_driver_ctx, a_program_icap)
+void programIcapAndVerify(dyplo::HardwareContext& context)
 {
 	dyplo::HardwareControl ctrl(context);
 	unsigned int icap_index = ctrl.getIcapNodeIndex(); // TODO: Fetch from logic
 	dyplo::HardwareConfig icap = context.openConfig(icap_index, O_RDWR);
 	EQUAL(icap_index, icap.getNodeIndex());
-	dyplo::HardwareFifo fifo(context.openFifo(0, O_WRONLY));
-	fifo.addRouteTo(icap_index);
+
 	std::vector<unsigned char> pr_nodes;
 	/* First program "testNode" using ICAP */
 	{
@@ -2428,3 +2428,24 @@ TEST(hardware_driver_ctx, a_program_icap)
 		EQUAL(data[1] + 1234, result[1]);
 	}
 }
+
+TEST(hardware_driver_ctx, a_program_icap_via_dma)
+{
+	// will try to program via DMA to ICAP
+	programIcapAndVerify(context);
+}
+
+TEST(hardware_driver_ctx, a_program_icap_via_cpu_fifo)
+{
+	// occupy all DMA nodes (forcing fallback on CPU node for programming ICAP)
+	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	std::list<dyplo::HardwareDMAFifo> dmaFifos;
+	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
+	{
+		dmaFifos.push_back(context.openDMA(dma_index, O_WRONLY));
+	}
+
+	// will try to program via CPU to ICAP
+	programIcapAndVerify(context);
+}
+

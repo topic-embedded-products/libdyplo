@@ -160,121 +160,65 @@ namespace dyplo
 		}
 	}
 
-	static const size_t ALIGN_SIZE = 4 * 1024;
-	static const size_t BUFFER_SIZE = 8 * ALIGN_SIZE;
-
-	unsigned int HardwareContext::program(File &output, File &input, ProgramTagCallback *tagCallback)
+	unsigned int HardwareContext::programPCAP(File &output, File &input, ProgramTagCallback *tagCallback)
 	{
-		std::vector<unsigned char> buffer(BUFFER_SIZE);
-		unsigned char* buffer_start = &buffer[0];
-		ssize_t bytes = input.read_all(buffer_start, ALIGN_SIZE);
-		if (bytes < 64)
-			throw TruncatedFileException();
-		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */
-			(parse_u16(buffer_start + 11) == 1) &&
-			(buffer[13] == 'a'))
-		{
-			/* It's a bitstream, convert and flash */
-			const unsigned char* end = buffer_start + bytes;
-			unsigned char* data = buffer_start + 13;
-			/* Browse through tag/value pairs looking for the "e" */
-			for(;;)
-			{
-				unsigned char tag = *data;
-				if (tag == 'e') /* Data tag, stop here */
-					break;
-				++data;
-				if (data >= end)
-					throw TruncatedFileException();
-				unsigned short sz = parse_u16(data);
-				unsigned char* value = data + 2;
-				data = value + sz;
-				if (data >= end)
-					throw TruncatedFileException();
-				if (tagCallback)
-					tagCallback->processTag(tag, sz, value);
-			}
-			++data;
-			if (data+4 >= end)
-				throw TruncatedFileException();
-			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-			data += 4;
-			unsigned int total_bytes = bytes - (data - buffer_start);
-			/* Move the remaining data to the buffer start to align
-			 * it on word boundary. */
-			memmove(buffer_start, data, total_bytes);
-			if (total_bytes >= size)
-			{
-				total_bytes = size;
-			}
-			else
-			{
-				/* make sure that we always transfer a multiple of
-				 * ALIGN_SIZE bytes to logic */
-				unsigned int align = total_bytes % ALIGN_SIZE;
-				if (align != 0)
-				{
-					align = ALIGN_SIZE - align; /* number of bytes to read */
-					bytes = input.read_all(buffer_start + total_bytes, align);
-					if (bytes < align)
-						throw TruncatedFileException();
-					total_bytes += align;
-				}
-			}
-			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
-			bytes = output.write(buffer_start, total_bytes);
-			if (bytes < total_bytes)
-				throw TruncatedFileException();
-			while (total_bytes < size)
-			{
-				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
-				bytes = input.read_all(buffer_start, to_read);
-				if (bytes < to_read)
-					throw TruncatedFileException();
-				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
-				bytes = output.write(buffer_start, to_read);
-				if (bytes < to_read)
-					throw TruncatedFileException();
-				total_bytes += bytes;
-			}
-			return size;
-		}
-		else
-		{
-			/* Probably a bin file, they tend to start with all FF...
-			 * so that seems a reasonable sanity check. */
-			if (*(unsigned int*)buffer_start != 0xFFFFFFFF)
-				throw std::runtime_error("Unrecognized bitstream format");
-			unsigned int total_written = 0;
-			do
-			{
-				ssize_t bytes_written = output.write(buffer_start, bytes);
-				if (bytes_written < bytes)
-					throw TruncatedFileException();
-				total_written += bytes;
-				bytes = input.read_all(buffer_start, BUFFER_SIZE);
-			}
-			while (bytes);
-			return total_written;
-		}
+		FpgaImageFileWriter writer(output);
+		FpgaImageReader reader(writer, tagCallback);
+		return reader.processFile(input);
 	}
 
-	unsigned int HardwareContext::program(File &output, const char* filename, ProgramTagCallback *tagCallback)
+	unsigned int HardwareContext::programPCAP(File &output, const char* filename, ProgramTagCallback *tagCallback)
 	{
 		File input(filename, O_RDONLY);
-		return program(output, input, tagCallback);
+		return programPCAP(output, input, tagCallback);
 	}
 
-	unsigned int HardwareContext::program(const char* filename)
+	unsigned int HardwareContext::programICAP(File& input, HardwareControl& hwControl)
 	{
-		File output(getDefaultProgramDestination(), O_WRONLY);
-		return program(output, filename);
+		HardwareProgrammer programmer(*this, hwControl);
+		return programmer.fromFile(input);
 	}
 
-	unsigned int HardwareContext::program(File &input)
+	unsigned int HardwareContext::program(const char* filename, HardwareControl &hwControl)
 	{
-		File output(getDefaultProgramDestination(), O_WRONLY);
-		return program(output, input);
+		File input(filename, O_RDONLY);
+		return program(input, hwControl);
+	}
+
+	unsigned int HardwareContext::program(File &input, HardwareControl &hwControl)
+	{
+		// first try ICAP
+		unsigned int bytes_processed = 0;
+		std::exception caught_exception;
+
+		try
+		{
+			bytes_processed = programICAP(input, hwControl);
+		}
+		catch (const std::exception& ex)
+		{
+			caught_exception = ex;
+		}
+
+		if (bytes_processed == 0)
+		{
+			// if ICAP failed, then try PCAP
+			try
+			{
+				File output(getDefaultProgramDestination(), O_WRONLY);
+				bytes_processed = programPCAP(output, input);
+			}
+			catch (const std::exception&)
+			{
+			}
+		}
+
+		if (bytes_processed == 0)
+		{
+			throw caught_exception;
+		}
+
+		return bytes_processed;
 	}
 
 	static bool is_digit(const char c)
@@ -804,70 +748,292 @@ namespace dyplo
 		return !memcmp(&lhs, &rhs, sizeof(lhs));
 	}
 
+	ssize_t FpgaImageFileWriter::processData(const void* data, const size_t length_bytes)
+	{
+		return output_file.write(data, length_bytes);
+	}
+
+	size_t FpgaImageReader::processFile(File& fpgaImageFile)
+	{
+		size_t total_data_bytes_processed = 0;
+
+		std::vector<unsigned char> buffer(BUFFER_SIZE);
+		unsigned char* buffer_start = &buffer[0];
+		ssize_t bytes = fpgaImageFile.read_all(buffer_start, ALIGN_SIZE);
+
+		if (bytes < 64)
+			throw TruncatedFileException();
+		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */
+			(parse_u16(buffer_start + 11) == 1) &&
+			(buffer[13] == 'a'))
+		{
+			/* It's a bitstream, convert and flash */
+			const unsigned char* end = buffer_start + bytes;
+			unsigned char* data = buffer_start + 13;
+			/* Browse through tag/value pairs looking for the "e" */
+			for(;;)
+			{
+				unsigned char tag = *data;
+				if (tag == 'e') /* Data tag, stop here */
+					break;
+				++data;
+				if (data >= end)
+					throw TruncatedFileException();
+				unsigned short sz = parse_u16(data);
+				unsigned char* value = data + 2;
+				data = value + sz;
+				if (data >= end)
+					throw TruncatedFileException();
+				// TODO: handle tags / mismatch between static and partial ID
+				if (tag_callback)
+					tag_callback->processTag(tag, sz, value);
+			}
+			++data;
+			if (data+4 >= end)
+				throw TruncatedFileException();
+			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+			total_data_bytes_processed = size;
+			data += 4;
+			unsigned int total_bytes = bytes - (data - buffer_start);
+			/* Move the remaining data to the buffer start to align
+			 * it on word boundary. */
+			memmove(buffer_start, data, total_bytes);
+			if (total_bytes >= size)
+			{
+				total_bytes = size;
+			}
+			else
+			{
+				/* make sure that we always transfer a multiple of
+				 * ALIGN_SIZE bytes to logic */
+				unsigned int align = total_bytes % ALIGN_SIZE;
+				if (align != 0)
+				{
+					align = ALIGN_SIZE - align; /* number of bytes to read */
+					bytes = fpgaImageFile.read_all(buffer_start + total_bytes, align);
+					if (bytes < align)
+						throw TruncatedFileException();
+					total_bytes += align;
+				}
+			}
+			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
+			bytes = callback.processData(buffer_start, total_bytes);
+			if (bytes < total_bytes)
+				throw TruncatedFileException();
+			while (total_bytes < size)
+			{
+				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
+				bytes = fpgaImageFile.read_all(buffer_start, to_read);
+				if (bytes < to_read)
+					throw TruncatedFileException();
+				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
+				bytes = callback.processData(buffer_start, to_read);
+				if (bytes < to_read)
+					throw TruncatedFileException();
+				total_bytes += bytes;
+			}
+		}
+		else
+		{
+			/* Probably a bin file, they tend to start with all FF...
+			 * so that seems a reasonable sanity check. */
+			if (*(unsigned int*)buffer_start != 0xFFFFFFFF)
+				throw std::runtime_error("Unrecognized bitstream format");
+
+			do
+			{
+				ssize_t bytes_written = callback.processData(buffer_start, bytes);
+				if (bytes_written < bytes)
+					throw TruncatedFileException();
+				total_data_bytes_processed += bytes;
+				bytes = fpgaImageFile.read_all(buffer_start, BUFFER_SIZE);
+			}
+			while (bytes);
+		}
+
+		return total_data_bytes_processed;
+	}
+
 	static const unsigned int programmer_blocksize = 65536;
 	static const unsigned int programmer_numblocks = 2;
 	static const unsigned int icap_nop_instruction = 0x20000000U;
 
-	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control):
-		writer(context.openAvailableDMA(O_RDWR))
+	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control) :
+		dma_writer(NULL),
+		cpu_fifo(NULL),
+		reader(*this)
 	{
+		// check if there is an ICAP node
 		int icap = control.getIcapNodeIndex();
-		if (icap < 0)
+		if (icap >= 0)
+		{
+			// try using the DMA node to set up the route
+			try
+			{
+				dma_writer = new HardwareDMAFifo(context.openAvailableDMA(O_RDWR));
+				dma_writer->reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
+					programmer_blocksize, programmer_numblocks, false);
+				dma_writer->addRouteTo(icap);
+			}
+			catch (const std::exception&)
+			{
+			}
+
+			if (dma_writer == NULL)
+			{
+				// No DMA.. try to use CPU Fifo
+				cpu_fifo = getAvailableCpuWriteFifo(context);
+				if (cpu_fifo != NULL)
+				{
+					cpu_fifo->addRouteTo(icap);
+				} else
+				{
+					throw IOException("No available CPU or DMA nodes to program ICAP", icap);
+				}
+			}
+		}
+		else
+		{
 			throw IOException("No ICAP", icap);
-		writer.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
-			programmer_blocksize, programmer_numblocks, false);
-		writer.addRouteTo(icap);
+		}
 	}
 
 	HardwareProgrammer::~HardwareProgrammer()
 	{
+		sendNOP(ESTIMATED_FIFO_SIZE);
+
 		/* Wait for all DMA transactions to finish */
-		writer.flush();
+		if (dma_writer != NULL)
+		{
+			dma_writer->flush();
+		}
+
+		/* Flush data written to CPU fifo */
+		if (cpu_fifo != NULL)
+		{
+			cpu_fifo->flush();
+		}
+
+		delete dma_writer;
+		delete cpu_fifo;
 	}
 
 	unsigned int HardwareProgrammer::fromFile(const char *filename)
 	{
 		File input(filename, O_RDONLY);
-		size_t total_read = 0;
-		for (;;)
-		{
-			HardwareDMAFifo::Block *block = writer.dequeue();
-			ssize_t bytes = input.read_all(block->data, block->size);
-			total_read += bytes;
-			/* Workaround for DMA node only supporting 64-bit writes */
-			if (bytes % 8)
-			{
-				if (bytes % 8 <= 4) /* Add a NOP instruction */
-					((unsigned int*)((char*)block->data + (bytes & 0xFFFFFFF8)))[1] = icap_nop_instruction;
-				bytes = (bytes + 7) & 0xFFFFFFF8U;
-			}
-			block->bytes_used = bytes;
-			writer.enqueue(block);
-			if (bytes < block->size)
-				break;
-		}
-		return total_read;
+		return fromFile(input);
+	}
+
+	unsigned int HardwareProgrammer::fromFile(File& file)
+	{
+		return reader.processFile(file);
 	}
 
 	unsigned int HardwareProgrammer::sendNOP(unsigned int count)
 	{
-		/* Send a block of NOP instructions. This is to flush all
-		 * internal queues, so that any data still in those queues
-		 * has been written to ICAP, and only the NOP commands remain
-		 * in the Dyplo queues. */
-		HardwareDMAFifo::Block *block = writer.dequeue();
 		/* Round up to multiple of 2 */
 		count = (count + 1) & ~1;
 		unsigned int bytes = count * sizeof(unsigned int);
-		if (bytes > block->size) {
-			bytes = block->size;
-			count = bytes / sizeof(unsigned int);
+
+		if (dma_writer != NULL)
+		{
+			/* Send a block of NOP instructions. This is to flush all
+			 * internal queues, so that any data still in those queues
+			 * has been written to ICAP, and only the NOP commands remain
+			 * in the Dyplo queues. */
+			HardwareDMAFifo::Block *block = dma_writer->dequeue();
+
+			if (bytes > block->size) {
+				bytes = block->size;
+				count = bytes / sizeof(unsigned int);
+			}
+			block->bytes_used = bytes;
+			unsigned int *data = (unsigned int*)block->data;
+			for (unsigned int i = 0; i < count; ++i)
+				data[i] = icap_nop_instruction;
+			dma_writer->enqueue(block);
+
+			return count;
 		}
-		block->bytes_used = bytes;
-		unsigned int *data = (unsigned int*)block->data;
-		for (unsigned int i = 0; i < count; ++i)
-			data[i] = icap_nop_instruction;
-		writer.enqueue(block);
-		return count;
+		else if (cpu_fifo != NULL)
+		{
+			unsigned int data[count];
+			for (unsigned int i = 0; i < count; ++i)
+				data[i] = icap_nop_instruction;
+
+			cpu_fifo->write(data, bytes);
+
+			return count;
+		}
+
+		return 0;
 	}
+
+	ssize_t HardwareProgrammer::processData(const void* data, const size_t length_bytes)
+	{
+		if (dma_writer != NULL)
+		{
+			HardwareDMAFifo::Block *block = dma_writer->dequeue();
+			memcpy(block->data, data, length_bytes);
+			/* Workaround for DMA node only supporting 64-bit writes */
+			size_t length_dma_block = length_bytes;
+			if (length_dma_block % 8)
+			{
+				if (length_dma_block % 8 <= 4) /* Add a NOP instruction */
+					((unsigned int*)((char*)block->data + (length_dma_block & 0xFFFFFFF8)))[1] = icap_nop_instruction;
+				length_dma_block = (length_dma_block + 7) & 0xFFFFFFF8U;
+			}
+			block->bytes_used = length_dma_block;
+			dma_writer->enqueue(block);
+
+			return length_bytes;
+		}
+		else if (cpu_fifo != NULL)
+		{
+			return cpu_fifo->write(data, length_bytes);
+		}
+
+		return 0;
+	}
+
+	int HardwareProgrammer::countNumberedFiles(const char* pattern)
+	{
+		int result = 0;
+		char filename[64];
+		for (;;)
+		{
+			sprintf(filename, pattern, result);
+			if (::access(filename, F_OK) != 0)
+				return result;
+			++result;
+		}
+	}
+
+	int HardwareProgrammer::getCpuWriteFifoCount()
+	{
+		int dyplo_cpu_fifo_count_w = countNumberedFiles("/dev/dyplow%d");
+		return dyplo_cpu_fifo_count_w;
+	}
+
+	HardwareFifo* HardwareProgrammer::getAvailableCpuWriteFifo(HardwareContext& context)
+	{
+		int numberOfCpuFifos = getCpuWriteFifoCount();
+		HardwareFifo* fifo = NULL;
+
+		// find available CPU node
+		for (int fifoIndex = 0; fifoIndex < numberOfCpuFifos; ++fifoIndex)
+		{
+			try
+			{
+				fifo = new HardwareFifo(context.openFifo(fifoIndex, O_WRONLY));
+				break;
+			}
+			catch (const std::exception&)
+			{
+			}
+		}
+
+		return fifo;
+	}
+
 }

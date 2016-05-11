@@ -35,6 +35,8 @@
 
 namespace dyplo
 {
+	class HardwareControl; // forward declaration
+
 	class ProgramTagCallback
 	{
 	public:
@@ -59,10 +61,15 @@ namespace dyplo
 		static void setProgramMode(bool is_partial_bitstream);
 		static bool getProgramMode();
 		static const char* getDefaultProgramDestination();
-		static unsigned int program(File &output, File &input, ProgramTagCallback *tagCallback = NULL);
-		static unsigned int program(File &output, const char* filename, ProgramTagCallback *tagCallback = NULL);
-		static unsigned int program(File &input);
-		static unsigned int program(const char* filename);
+
+		// generic program functions. Will attempt to program, either via ICAP and if that fails via PCAP:
+		unsigned int program(File &input, HardwareControl& hwControl);
+		unsigned int program(const char* filename, HardwareControl& hwControl);
+		// program functions for specific interfaces:
+		unsigned int programICAP(File &input, HardwareControl& hwControl);
+		static unsigned int programPCAP(File &output, File &input, ProgramTagCallback *tagCallback = NULL);
+		static unsigned int programPCAP(File &output, const char* filename, ProgramTagCallback *tagCallback = NULL);
+
 		static bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 
 		/* Find bitfiles in directories */
@@ -224,15 +231,80 @@ namespace dyplo
 	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs);
 	inline bool operator!=(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs) {return !(lhs == rhs);}
 
-	class HardwareProgrammer
+	class FpgaImageReaderCallback
 	{
-	protected:
-		HardwareDMAFifo writer;
+	public:
+		// returns amount of bytes processed
+		virtual ssize_t processData(const void* data, const size_t length_bytes) = 0;
+	};
+
+	class FpgaImageFileWriter : public FpgaImageReaderCallback
+	{
+	public:
+		FpgaImageFileWriter(File& output) :
+			output_file(output)
+		{
+		}
+
+		~FpgaImageFileWriter()
+		{
+			output_file.flush();
+		}
+
+		virtual ssize_t processData(const void* data, const size_t length_bytes);
+	private:
+		File& output_file;
+	};
+
+	static const size_t ALIGN_SIZE = 4 * 1024;
+	static const size_t BUFFER_SIZE = 8 * ALIGN_SIZE;
+	static const size_t ESTIMATED_FIFO_SIZE = 256;
+
+	// can read .bit and .bin files and will output the data to be flashed on the FPGA
+	class FpgaImageReader
+	{
+	public:
+		FpgaImageReader(FpgaImageReaderCallback& resultCallback, ProgramTagCallback *tagCallback = NULL) :
+			callback(resultCallback),
+			tag_callback(tagCallback)
+		{
+		}
+
+		// returns amount of bytes read
+		size_t processFile(File& fpgaImageFile);
+
+	private:
+		FpgaImageReaderCallback& callback;
+		ProgramTagCallback*      tag_callback;
+	};
+
+	// can program via ICAP
+	class HardwareProgrammer : public FpgaImageReaderCallback
+	{
 	public:
 		HardwareProgrammer(HardwareContext& context, HardwareControl& control);
 		~HardwareProgrammer();
+
+		// returns amount of bytes read
 		unsigned int fromFile(const char *filename);
+		unsigned int fromFile(File& file);
+
+		// FpgaImageReaderCallback interface
+		virtual ssize_t processData(const void* data, const size_t length_bytes);
+	protected:
+		// for DMA data stream to ICAP
+		HardwareDMAFifo* dma_writer;
+
+		// for CPU data stream to ICAP
+		HardwareFifo*    cpu_fifo;
+	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);
+		int countNumberedFiles(const char* pattern);
+		int getCpuWriteFifoCount();
+		HardwareFifo* getAvailableCpuWriteFifo(HardwareContext& context);
+
+		FpgaImageReader reader;
 	};
+
 }

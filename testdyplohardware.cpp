@@ -105,12 +105,12 @@ TEST(hardware_programmer, bin_file)
 	dyplo::File bitstream(::open("/tmp/bitstream", O_CREAT | O_WRONLY, S_IRUSR|S_IWUSR));
 	/* Invalid stream must throw exception */
 	bitstream.write(invalid_bitstream, sizeof(invalid_bitstream));
-	ASSERT_THROW(ctrl.program(xdevcfg, "/tmp/bitstream"), std::runtime_error);
+	ASSERT_THROW(ctrl.programPCAP(xdevcfg, "/tmp/bitstream"), std::runtime_error);
 	/* Valid binary "raw" stream, pass through unchanged */
 	{
 		bitstream.seek(0);
 		bitstream.write(valid_bin_bitstream, sizeof(valid_bin_bitstream));
-		EQUAL(sizeof(valid_bin_bitstream), ctrl.program(xdevcfg, "/tmp/bitstream"));
+		EQUAL(sizeof(valid_bin_bitstream), ctrl.programPCAP(xdevcfg, "/tmp/bitstream"));
 		std::vector<unsigned char> buffer(sizeof(valid_bin_bitstream));
 		xdevcfg.seek(0);
 		EQUAL((ssize_t)sizeof(valid_bin_bitstream), xdevcfg.read(&buffer[0], sizeof(valid_bin_bitstream)));
@@ -124,7 +124,7 @@ TEST(hardware_programmer, bin_file)
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		bitstream.write(valid_bit_bitstream, sizeof(valid_bit_bitstream));
-		EQUAL(32u, ctrl.program(xdevcfg, "/tmp/bitstream", &tagger));
+		EQUAL(32u, ctrl.programPCAP(xdevcfg, "/tmp/bitstream", &tagger));
 		std::vector<unsigned char> buffer(sizeof(valid_bit_bitstream));
 		xdevcfg.seek(0);
 		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); /* Properly truncated */
@@ -144,7 +144,7 @@ TEST(hardware_programmer, bin_file)
 		for (unsigned int i = 0; i < buffer.size(); ++i)
 			buffer[i] = bswap32(i);
 		bitstream.write(&buffer[0], 0x10000);
-		EQUAL(0x10000u, ctrl.program(xdevcfg, "/tmp/bitstream", NULL));
+		EQUAL(0x10000u, ctrl.programPCAP(xdevcfg, "/tmp/bitstream", NULL));
 		xdevcfg.seek(0);
 		EQUAL(0x10000u, xdevcfg.read(&buffer[0], 0x10000u)); /* Properly truncated */
 		for (unsigned int i = 0; i < buffer.size(); ++i)
@@ -157,7 +157,7 @@ TEST(hardware_programmer, bin_file)
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		EQUAL(0, ::ftruncate(bitstream, sizeof(valid_bit_bitstream) - 10));
-		ASSERT_THROW(ctrl.program(xdevcfg, "/tmp/bitstream", &tagger), dyplo::TruncatedFileException);
+		ASSERT_THROW(ctrl.programPCAP(xdevcfg, "/tmp/bitstream", &tagger), dyplo::TruncatedFileException);
 		/* Tags must still have been processed */
 		tagger.verify();
 	}

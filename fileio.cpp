@@ -66,6 +66,11 @@ namespace dyplo
 		}
 	}
 
+	bool File::flush()
+	{
+		return (fsync(handle) == 0);
+	}
+
 	void File::fcntl_set_flag(long flag)
 	{
 		int flags = ::fcntl(handle, F_GETFL, 0);
