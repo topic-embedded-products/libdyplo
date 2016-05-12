@@ -40,8 +40,6 @@
 #include <fstream>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
-#define XILINX_IS_PARTIAL_BITSTREAM_FILE "/sys/class/xdevcfg/xdevcfg/device/is_partial_bitstream"
-#define XILINX_XDEVCFG "/dev/xdevcfg"
 
 extern "C"
 {
@@ -120,29 +118,6 @@ namespace dyplo
 		return ::open(name.str().c_str(), access);
 	}
 
-	void HardwareContext::setProgramMode(bool is_partial_bitstream)
-	{
-		File fd(XILINX_IS_PARTIAL_BITSTREAM_FILE, O_WRONLY);
-		char value = is_partial_bitstream ? '1' : '0';
-		if (fd.write(&value, sizeof(value)) != sizeof(value))
-			throw TruncatedFileException();
-	}
-
-	bool HardwareContext::getProgramMode()
-	{
-		File fd(XILINX_IS_PARTIAL_BITSTREAM_FILE, O_RDONLY);
-		char value;
-		ssize_t r = fd.read(&value, sizeof(value));
-		if (r  != sizeof(value))
-			throw TruncatedFileException();
-		return (value != '0');
-	}
-
-	const char* HardwareContext::getDefaultProgramDestination()
-	{
-		return XILINX_XDEVCFG;
-	}
-
 	static unsigned short parse_u16(const unsigned char* data)
 	{
 		return (data[0] << 8) | data[1];
@@ -160,25 +135,6 @@ namespace dyplo
 		}
 	}
 
-	unsigned int HardwareContext::programPCAP(File &output, File &input, ProgramTagCallback *tagCallback)
-	{
-		FpgaImageFileWriter writer(output);
-		FpgaImageReader reader(writer, tagCallback);
-		return reader.processFile(input);
-	}
-
-	unsigned int HardwareContext::programPCAP(File &output, const char* filename, ProgramTagCallback *tagCallback)
-	{
-		File input(filename, O_RDONLY);
-		return programPCAP(output, input, tagCallback);
-	}
-
-	unsigned int HardwareContext::programICAP(File& input, HardwareControl& hwControl)
-	{
-		HardwareProgrammer programmer(*this, hwControl);
-		return programmer.fromFile(input);
-	}
-
 	unsigned int HardwareContext::program(const char* filename, HardwareControl &hwControl)
 	{
 		File input(filename, O_RDONLY);
@@ -188,37 +144,8 @@ namespace dyplo
 	unsigned int HardwareContext::program(File &input, HardwareControl &hwControl)
 	{
 		// first try ICAP
-		unsigned int bytes_processed = 0;
-		std::exception caught_exception;
-
-		try
-		{
-			bytes_processed = programICAP(input, hwControl);
-		}
-		catch (const std::exception& ex)
-		{
-			caught_exception = ex;
-		}
-
-		if (bytes_processed == 0)
-		{
-			// if ICAP failed, then try PCAP
-			try
-			{
-				File output(getDefaultProgramDestination(), O_WRONLY);
-				bytes_processed = programPCAP(output, input);
-			}
-			catch (const std::exception&)
-			{
-			}
-		}
-
-		if (bytes_processed == 0)
-		{
-			throw caught_exception;
-		}
-
-		return bytes_processed;
+		HardwareProgrammer programmer(*this, hwControl);
+		return programmer.fromFile(input);
 	}
 
 	static bool is_digit(const char c)
@@ -760,7 +687,6 @@ namespace dyplo
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
 		unsigned char* buffer_start = &buffer[0];
 		ssize_t bytes = fpgaImageFile.read_all(buffer_start, ALIGN_SIZE);
-
 		if (bytes < 64)
 			throw TruncatedFileException();
 		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */

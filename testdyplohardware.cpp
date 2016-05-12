@@ -97,34 +97,47 @@ static unsigned int bswap32(unsigned int x)
 	return (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
 }
 
+// testing bin / bit support by FpgaImageReader
 TEST(hardware_programmer, bin_file)
 {
 	TestContext tc;
-	dyplo::HardwareContext ctrl("/tmp/dyplo"); /* Create a "fake" device */
+
+	const char* bitstreamPath = "/tmp/bitstream";
+
 	dyplo::File xdevcfg(::open("/tmp/xdevcfg", O_CREAT | O_RDWR, S_IRUSR|S_IWUSR));
-	dyplo::File bitstream(::open("/tmp/bitstream", O_CREAT | O_WRONLY, S_IRUSR|S_IWUSR));
+	dyplo::File bitstream(::open(bitstreamPath, O_CREAT | O_WRONLY, S_IRUSR|S_IWUSR));
+	dyplo::File bitstreamToRead = dyplo::File(::open(bitstreamPath, O_RDONLY));
+	dyplo::FpgaImageFileWriter writer(xdevcfg);
+	dyplo::FpgaImageReader reader(writer);
+
 	/* Invalid stream must throw exception */
 	bitstream.write(invalid_bitstream, sizeof(invalid_bitstream));
-	ASSERT_THROW(ctrl.programPCAP(xdevcfg, "/tmp/bitstream"), std::runtime_error);
+
+	ASSERT_THROW(reader.processFile(bitstreamToRead), std::runtime_error);
+
 	/* Valid binary "raw" stream, pass through unchanged */
 	{
 		bitstream.seek(0);
 		bitstream.write(valid_bin_bitstream, sizeof(valid_bin_bitstream));
-		EQUAL(sizeof(valid_bin_bitstream), ctrl.programPCAP(xdevcfg, "/tmp/bitstream"));
+		bitstreamToRead.seek(0);
+		EQUAL(sizeof(valid_bin_bitstream), reader.processFile(bitstreamToRead));
 		std::vector<unsigned char> buffer(sizeof(valid_bin_bitstream));
 		xdevcfg.seek(0);
 		EQUAL((ssize_t)sizeof(valid_bin_bitstream), xdevcfg.read(&buffer[0], sizeof(valid_bin_bitstream)));
 		CHECK(memcmp(valid_bin_bitstream, &buffer[0], sizeof(valid_bin_bitstream)) == 0);
 		EQUAL((ssize_t)sizeof(valid_bin_bitstream), dyplo::File::get_size("/tmp/bitstream"));
 	}
+
 	/* Valid "bit" stream, must remove header and flip bytes */
 	{
 		TestProgramTagCallback tagger;
+		dyplo::FpgaImageReader readerWithTagger(writer, &tagger);
 		xdevcfg.seek(0);
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		bitstream.write(valid_bit_bitstream, sizeof(valid_bit_bitstream));
-		EQUAL(32u, ctrl.programPCAP(xdevcfg, "/tmp/bitstream", &tagger));
+		bitstreamToRead.seek(0);
+		EQUAL(32u, readerWithTagger.processFile(bitstreamToRead));
 		std::vector<unsigned char> buffer(sizeof(valid_bit_bitstream));
 		xdevcfg.seek(0);
 		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); /* Properly truncated */
@@ -144,7 +157,8 @@ TEST(hardware_programmer, bin_file)
 		for (unsigned int i = 0; i < buffer.size(); ++i)
 			buffer[i] = bswap32(i);
 		bitstream.write(&buffer[0], 0x10000);
-		EQUAL(0x10000u, ctrl.programPCAP(xdevcfg, "/tmp/bitstream", NULL));
+		bitstreamToRead.seek(0);
+		EQUAL(0x10000u, reader.processFile(bitstreamToRead));
 		xdevcfg.seek(0);
 		EQUAL(0x10000u, xdevcfg.read(&buffer[0], 0x10000u)); /* Properly truncated */
 		for (unsigned int i = 0; i < buffer.size(); ++i)
@@ -153,11 +167,13 @@ TEST(hardware_programmer, bin_file)
 	/* Truncated "bit" stream */
 	{
 		TestProgramTagCallback tagger;
+		dyplo::FpgaImageReader readerWithTagger(writer, &tagger);
 		xdevcfg.seek(0);
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
+		bitstreamToRead.seek(0);
 		EQUAL(0, ::ftruncate(bitstream, sizeof(valid_bit_bitstream) - 10));
-		ASSERT_THROW(ctrl.programPCAP(xdevcfg, "/tmp/bitstream", &tagger), dyplo::TruncatedFileException);
+		ASSERT_THROW(readerWithTagger.processFile(bitstreamToRead), dyplo::TruncatedFileException);
 		/* Tags must still have been processed */
 		tagger.verify();
 	}
@@ -193,34 +209,6 @@ TEST(hardware_programmer, parse_description_tag)
 	result = dyplo::HardwareContext::parseDescriptionTag(d3, sizeof(d3), &partial, NULL);
 	EQUAL(false, partial);
 	EQUAL(true, result);
-}
-
-TEST(hardware_programmer, program_mode)
-{
-	try
-	{
-		dyplo::HardwareContext ctrl;
-		/* If this fails, there is no driver present so skip it */
-		bool old_mode = ctrl.getProgramMode();
-		try
-		{
-			ctrl.setProgramMode(true);
-			CHECK(ctrl.getProgramMode());
-			ctrl.setProgramMode(false);
-			CHECK(!ctrl.getProgramMode());
-			ctrl.setProgramMode(old_mode);
-		}
-		catch (const dyplo::IOException& ex)
-		{
-			/* Above methods should NOT throw errors */
-			FAIL(ex.what());
-		}
-	}
-	catch (const dyplo::IOException&)
-	{
-		std::cerr << " (skip)";
-		return;
-	}
 }
 
 class LotsOfFiles

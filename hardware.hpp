@@ -57,18 +57,9 @@ namespace dyplo
 		int openDMA(int index, int access);
 		int openAvailableDMA(int access);
 
-		/* Program device using a partial or full bitstream */
-		static void setProgramMode(bool is_partial_bitstream);
-		static bool getProgramMode();
-		static const char* getDefaultProgramDestination();
-
-		// generic program functions. Will attempt to program, either via ICAP and if that fails via PCAP:
+		// Will attempt to program via ICAP interface:
 		unsigned int program(File &input, HardwareControl& hwControl);
 		unsigned int program(const char* filename, HardwareControl& hwControl);
-		// program functions for specific interfaces:
-		unsigned int programICAP(File &input, HardwareControl& hwControl);
-		static unsigned int programPCAP(File &output, File &input, ProgramTagCallback *tagCallback = NULL);
-		static unsigned int programPCAP(File &output, const char* filename, ProgramTagCallback *tagCallback = NULL);
 
 		static bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 

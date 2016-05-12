@@ -56,6 +56,7 @@ namespace dyplo
 			if (result <= 0) {
 				if ((result == 0) || (bytes != 0))
 					return bytes;
+
 				throw dyplo::IOException();
 			}
 			bytes += result;
