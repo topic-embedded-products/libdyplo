@@ -54,6 +54,8 @@ namespace dyplo
 		int openControl(int access);
 		int openDMA(int index, int access);
 		int openAvailableDMA(int access);
+		int openAvailableWriteFifo();
+		int openAvailableReadFifo();
 
 		static bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 
@@ -293,9 +295,7 @@ namespace dyplo
 	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);
-		int countNumberedFiles(const char* pattern);
-		int getCpuWriteFifoCount();
-		HardwareFifo* getAvailableCpuWriteFifo(HardwareContext& context);
+		//HardwareFifo* getAvailableCpuWriteFifo(HardwareContext& context);
 
 		FpgaImageReader reader;
 	};

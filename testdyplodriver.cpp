@@ -2384,6 +2384,7 @@ void programIcapAndVerify(dyplo::HardwareContext& context)
 			}
 		}
 	}
+
 	/* TODO: Check that the nodes are really testNode type? */
 	pr_nodes.clear();
 	/* Program "adder" using the ICAP method */

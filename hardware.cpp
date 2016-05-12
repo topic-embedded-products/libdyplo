@@ -104,6 +104,63 @@ namespace dyplo
 		throw IOException(ENODEV);
 	}
 
+	int count_numbered_files(const char* pattern)
+	{
+		int result = 0;
+		char filename[64];
+		for (;;)
+		{
+			sprintf(filename, pattern, result);
+			if (::access(filename, F_OK) != 0)
+				return result;
+			++result;
+		}
+	}
+
+	int get_dyplo_cpu_fifo_count_r()
+	{
+		return count_numbered_files("/dev/dyplor%d");
+	}
+
+	int get_dyplo_cpu_fifo_count_w()
+	{
+		return count_numbered_files("/dev/dyplow%d");
+	}
+
+	int HardwareContext::openAvailableWriteFifo()
+	{
+		int numberOfCpuFifos = get_dyplo_cpu_fifo_count_w();
+
+		for (int fifoIndex = 0; fifoIndex < numberOfCpuFifos; ++fifoIndex)
+		{
+			int fileDesc = openFifo(fifoIndex, O_WRONLY);
+
+			if (fileDesc != -1)
+				return fileDesc;
+			if (errno != EBUSY)
+				throw IOException();
+		}
+
+		throw IOException(ENODEV);
+	}
+
+	int HardwareContext::openAvailableReadFifo()
+	{
+		int numberOfCpuFifos = get_dyplo_cpu_fifo_count_r();
+
+		for (int fifoIndex = 0; fifoIndex < numberOfCpuFifos; ++fifoIndex)
+		{
+			int fileDesc = openFifo(fifoIndex, O_RDONLY);
+			if (fileDesc != -1)
+				return fileDesc;
+			if (errno != EBUSY)
+				throw IOException();
+		}
+
+		throw IOException(ENODEV);
+	}
+
+
 	int HardwareContext::openConfig(int index, int access)
 	{
 		std::ostringstream name;
@@ -796,30 +853,35 @@ namespace dyplo
 			try
 			{
 				dma_writer = new HardwareDMAFifo(context.openAvailableDMA(O_RDWR));
-				dma_writer->reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
-					programmer_blocksize, programmer_numblocks, false);
-				dma_writer->addRouteTo(icap);
+
 			}
 			catch (const std::exception&)
 			{
+				// DMA failed, continue by trying the CPU node
+				try
+				{
+					cpu_fifo = new HardwareFifo(context.openAvailableWriteFifo());
+				}
+				catch (const std::exception&)
+				{
+					throw IOException("No available CPU or DMA nodes to program ICAP");
+				}
 			}
 
-			if (dma_writer == NULL)
+			// set routes
+			if (dma_writer != NULL)
 			{
-				// No DMA.. try to use CPU Fifo
-				cpu_fifo = getAvailableCpuWriteFifo(context);
-				if (cpu_fifo != NULL)
-				{
-					cpu_fifo->addRouteTo(icap);
-				} else
-				{
-					throw IOException("No available CPU or DMA nodes to program ICAP", icap);
-				}
+				dma_writer->reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
+					programmer_blocksize, programmer_numblocks, false);
+				dma_writer->addRouteTo(icap);
+			} else if (cpu_fifo != NULL)
+			{
+				cpu_fifo->addRouteTo(icap);
 			}
 		}
 		else
 		{
-			throw IOException("No ICAP", icap);
+			throw IOException("No ICAP");
 		}
 	}
 
@@ -919,46 +981,6 @@ namespace dyplo
 		}
 
 		return 0;
-	}
-
-	int HardwareProgrammer::countNumberedFiles(const char* pattern)
-	{
-		int result = 0;
-		char filename[64];
-		for (;;)
-		{
-			sprintf(filename, pattern, result);
-			if (::access(filename, F_OK) != 0)
-				return result;
-			++result;
-		}
-	}
-
-	int HardwareProgrammer::getCpuWriteFifoCount()
-	{
-		int dyplo_cpu_fifo_count_w = countNumberedFiles("/dev/dyplow%d");
-		return dyplo_cpu_fifo_count_w;
-	}
-
-	HardwareFifo* HardwareProgrammer::getAvailableCpuWriteFifo(HardwareContext& context)
-	{
-		int numberOfCpuFifos = getCpuWriteFifoCount();
-		HardwareFifo* fifo = NULL;
-
-		// find available CPU node
-		for (int fifoIndex = 0; fifoIndex < numberOfCpuFifos; ++fifoIndex)
-		{
-			try
-			{
-				fifo = new HardwareFifo(context.openFifo(fifoIndex, O_WRONLY));
-				break;
-			}
-			catch (const std::exception&)
-			{
-			}
-		}
-
-		return fifo;
 	}
 
 }

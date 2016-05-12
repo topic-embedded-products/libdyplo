@@ -28,6 +28,7 @@
  */
 #include "fileio.hpp"
 #include "exceptions.hpp"
+#include <errno.h>
 
 namespace dyplo
 {
@@ -69,9 +70,16 @@ namespace dyplo
 
 	void File::flush()
 	{
-		if (fsync(handle) != 0)
+		if (fsync(handle) == -1)
 		{
-			throw dyplo::IOException();
+			if (errno == EROFS || errno == EINVAL)
+			{
+				// no need to throw exception:
+				// handle is bound to a special file which does not support synchronization
+			} else
+			{
+				throw dyplo::IOException();
+			}
 		}
 	}
 
