@@ -35,8 +35,6 @@
 
 namespace dyplo
 {
-	class HardwareControl; // forward declaration
-
 	class ProgramTagCallback
 	{
 	public:
@@ -56,10 +54,6 @@ namespace dyplo
 		int openControl(int access);
 		int openDMA(int index, int access);
 		int openAvailableDMA(int access);
-
-		// Will attempt to program via ICAP interface:
-		unsigned int program(File &input, HardwareControl& hwControl);
-		unsigned int program(const char* filename, HardwareControl& hwControl);
 
 		static bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 
@@ -86,7 +80,8 @@ namespace dyplo
 		};
 
 		HardwareControl(HardwareContext& context):
-			File(context.openControl(O_RDWR))
+			File(context.openControl(O_RDWR)),
+			ctx(context)
 		{}
 
 		void routeDeleteAll();
@@ -94,6 +89,10 @@ namespace dyplo
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
 		void routeDelete(char node);
+
+		// Will attempt to program via ICAP interface:
+		unsigned int program(File &input);
+		unsigned int program(const char* filename);
 
 		unsigned int getEnabledNodes();
 		void enableNodes(unsigned int mask);
@@ -108,6 +107,9 @@ namespace dyplo
 
 		/* Retrieve ICAP node index. Negative means there is none. */
 		int getIcapNodeIndex();
+
+	private:
+		HardwareContext& ctx;
 	};
 
 	class HardwareConfig: public File

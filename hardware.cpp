@@ -135,19 +135,6 @@ namespace dyplo
 		}
 	}
 
-	unsigned int HardwareContext::program(const char* filename, HardwareControl &hwControl)
-	{
-		File input(filename, O_RDONLY);
-		return program(input, hwControl);
-	}
-
-	unsigned int HardwareContext::program(File &input, HardwareControl &hwControl)
-	{
-		// first try ICAP
-		HardwareProgrammer programmer(*this, hwControl);
-		return programmer.fromFile(input);
-	}
-
 	static bool is_digit(const char c)
 	{
 		return (c >= '0') && (c <= '9');
@@ -300,6 +287,18 @@ namespace dyplo
 		int arg = node;
 		if (::ioctl(handle, DYPLO_IOCTROUTE_DELETE, arg) != 0)
 			throw IOException(__func__);
+	}
+
+	unsigned int HardwareControl::program(const char* filename)
+	{
+		File input(filename, O_RDONLY);
+		return program(input);
+	}
+
+	unsigned int HardwareControl::program(File &input)
+	{
+		HardwareProgrammer programmer(ctx, *this);
+		return programmer.fromFile(input);
 	}
 
 	unsigned int HardwareControl::getEnabledNodes()
