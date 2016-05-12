@@ -766,7 +766,7 @@ namespace dyplo
 				data = value + sz;
 				if (data >= end)
 					throw TruncatedFileException();
-				// TODO: handle tags / mismatch between static and partial ID
+
 				if (tag_callback)
 					tag_callback->processTag(tag, sz, value);
 			}
@@ -840,10 +840,43 @@ namespace dyplo
 	static const unsigned int programmer_numblocks = 2;
 	static const unsigned int icap_nop_instruction = 0x20000000U;
 
+	FpgaImageIdValidator::FpgaImageIdValidator(HardwareContext& context, HardwareControl& control) :
+		ctx(context),
+		ctrl(control),
+		dyplo_user_id_valid(false)
+	{
+	}
+
+	void FpgaImageIdValidator::processTag(char tag, unsigned short size, const void* data)
+	{
+		if (tag == 'a')
+		{
+			unsigned int user_id;
+			bool is_partial = true; // for now, assumption is that the user only programs partials via the available ICAP interface
+			bool has_user_id = dyplo::HardwareContext::parseDescriptionTag((const char*)data, size, &is_partial, &user_id);
+			if (has_user_id && is_partial)
+			{
+				if (getDyploStaticID() != user_id)
+					throw StaticPartialIDMismatchException();
+			}
+		}
+	}
+
+	unsigned int FpgaImageIdValidator::getDyploStaticID()
+	{
+		if (!dyplo_user_id_valid)
+		{
+			dyplo_user_id = ctrl.readDyploStaticID();
+			dyplo_user_id_valid = true;
+		}
+		return dyplo_user_id;
+	}
+
 	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control) :
 		dma_writer(NULL),
 		cpu_fifo(NULL),
-		reader(*this)
+		validator(context, control),
+		reader(*this, &validator)
 	{
 		// check if there is an ICAP node
 		int icap = control.getIcapNodeIndex();
@@ -982,5 +1015,9 @@ namespace dyplo
 
 		return 0;
 	}
+
+
+
+
 
 }

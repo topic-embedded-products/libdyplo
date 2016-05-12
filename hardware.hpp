@@ -259,7 +259,7 @@ namespace dyplo
 	class FpgaImageReader
 	{
 	public:
-		FpgaImageReader(FpgaImageReaderCallback& resultCallback, ProgramTagCallback *tagCallback = NULL) :
+		FpgaImageReader(FpgaImageReaderCallback& resultCallback, ProgramTagCallback* tagCallback = NULL) :
 			callback(resultCallback),
 			tag_callback(tagCallback)
 		{
@@ -271,6 +271,23 @@ namespace dyplo
 	private:
 		FpgaImageReaderCallback& callback;
 		ProgramTagCallback*      tag_callback;
+	};
+
+	class FpgaImageIdValidator: public dyplo::ProgramTagCallback
+	{
+	public:
+		FpgaImageIdValidator(dyplo::HardwareContext &context, dyplo::HardwareControl &control);
+
+		// ProgramTagCallback interface
+		virtual void processTag(char tag, unsigned short size, const void *data);
+
+	private:
+		dyplo::HardwareContext &ctx;
+		dyplo::HardwareControl &ctrl;
+		unsigned int dyplo_user_id;
+		bool dyplo_user_id_valid;
+
+		unsigned int getDyploStaticID();
 	};
 
 	// can program via ICAP
@@ -295,8 +312,8 @@ namespace dyplo
 	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);
-		//HardwareFifo* getAvailableCpuWriteFifo(HardwareContext& context);
 
+		FpgaImageIdValidator validator;
 		FpgaImageReader reader;
 	};
 
