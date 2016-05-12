@@ -66,9 +66,12 @@ namespace dyplo
 		}
 	}
 
-	bool File::flush()
+	void File::flush()
 	{
-		return (fsync(handle) == 0);
+		if (fsync(handle) != 0)
+		{
+			throw dyplo::IOException();
+		}
 	}
 
 	void File::fcntl_set_flag(long flag)

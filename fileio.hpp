@@ -91,7 +91,7 @@ namespace dyplo
 		}
 
 		// synchronize all data to the disk
-		bool flush();
+		void flush();
 
 		/* Call fcntl to set a flag like O_NONBLOCK or O_APPEND. Uses
 		 * F_GETFL and ORs the result with the flag for F_SETFL. */
