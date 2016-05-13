@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fstream>
+#include <assert.h>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 
@@ -104,25 +105,26 @@ namespace dyplo
 		throw IOException(ENODEV);
 	}
 
-	int count_numbered_files(const char* pattern)
+	static int count_numbered_files(const char* pattern)
 	{
 		int result = 0;
 		char filename[64];
 		for (;;)
 		{
-			sprintf(filename, pattern, result);
+			int char_amount_requested = snprintf(filename, sizeof(filename), pattern, result);
+			assert(char_amount_requested < sizeof(filename));
 			if (::access(filename, F_OK) != 0)
 				return result;
 			++result;
 		}
 	}
 
-	int get_dyplo_cpu_fifo_count_r()
+	static int get_dyplo_cpu_fifo_count_r()
 	{
 		return count_numbered_files("/dev/dyplor%d");
 	}
 
-	int get_dyplo_cpu_fifo_count_w()
+	static int get_dyplo_cpu_fifo_count_w()
 	{
 		return count_numbered_files("/dev/dyplow%d");
 	}

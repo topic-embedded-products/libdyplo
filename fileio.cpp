@@ -76,7 +76,8 @@ namespace dyplo
 			{
 				// no need to throw exception:
 				// handle is bound to a special file which does not support synchronization
-			} else
+			}
+			else
 			{
 				throw dyplo::IOException();
 			}
