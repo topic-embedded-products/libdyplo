@@ -40,6 +40,8 @@
 #include <fstream>
 #include <assert.h>
 
+#include <iostream>
+
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 
 extern "C"
@@ -211,7 +213,9 @@ namespace dyplo
 			if (!memcmp(data, "UserID=", 7))
 			{
 				if (user_id)
-					*user_id = strtoul(data + 7, NULL, 0);
+				{
+					*user_id = strtoul(data + 7, NULL, 16);
+				}
 				result = true;
 			}
 			else if (is_partial && !memcmp(data, "PARTIAL=", 8))
@@ -859,7 +863,9 @@ namespace dyplo
 			if (has_user_id && is_partial)
 			{
 				if (getDyploStaticID() != user_id)
+				{
 					throw StaticPartialIDMismatchException();
+				}
 			}
 		}
 	}
