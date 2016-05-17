@@ -40,8 +40,6 @@
 #include <fstream>
 #include <assert.h>
 
-#include <iostream>
-
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 
 extern "C"
