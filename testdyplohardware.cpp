@@ -71,14 +71,40 @@ static const unsigned char valid_bit_bitstream[128] = {
 
 struct hardware_programmer {};
 
-class TestProgramTagCallback: public dyplo::ProgramTagCallback
+class FpgaImageReaderCallbackMock : public dyplo::FpgaImageReaderCallback
 {
 public:
-	std::map<char, std::string> tags;
-	virtual void processTag(char tag, unsigned short size, const void *data)
+	virtual ssize_t processData(const void* data, const size_t length_bytes)
+	{
+		// do nothing
+	}
+
+	virtual void verifyStaticID(const unsigned int user_id)
+	{
+		// do nothing
+	}
+};
+
+
+class FpgaImageReaderWithTagValidation : public dyplo::FpgaImageReader
+{
+public:
+	FpgaImageReaderWithTagValidation(dyplo::FpgaImageReaderCallback& callback) :
+		FpgaImageReader(callback)
+	{
+	}
+
+	bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id)
+	{
+		return dyplo::FpgaImageReader::parseDescriptionTag(data, size, is_partial, user_id);
+	}
+
+	void processTag(char tag, unsigned short size, const void *data)
 	{
 		tags[tag] = std::string((const char*)data, size);
+		dyplo::FpgaImageReader::processTag(tag, size, data);
 	}
+
 	void verify()
 	{
 		CHECK(!tags.empty());
@@ -90,6 +116,9 @@ public:
 		EQUAL(std::string("2013/08/30\0", 11), tags['c']);
 		EQUAL(std::string("11:52:15\0", 9), tags['d']);
 	}
+
+private:
+	std::map<char, std::string> tags;
 };
 
 static unsigned int bswap32(unsigned int x)
@@ -130,8 +159,7 @@ TEST(hardware_programmer, bin_file)
 
 	/* Valid "bit" stream, must remove header and flip bytes */
 	{
-		TestProgramTagCallback tagger;
-		dyplo::FpgaImageReader readerWithTagger(writer, &tagger);
+		FpgaImageReaderWithTagValidation readerWithTagger(writer);
 		xdevcfg.seek(0);
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
@@ -140,11 +168,12 @@ TEST(hardware_programmer, bin_file)
 		EQUAL(32u, readerWithTagger.processFile(bitstreamToRead));
 		std::vector<unsigned char> buffer(sizeof(valid_bit_bitstream));
 		xdevcfg.seek(0);
-		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); /* Properly truncated */
+		EQUAL(32, xdevcfg.read(&buffer[0], sizeof(valid_bit_bitstream))); // Properly truncated
 		for (int i=0; i<32; ++i)
-			EQUAL(i+1, (int)buffer[i]); /* Byte reversal check */
-		tagger.verify();
+			EQUAL(i+1, (int)buffer[i]); // Byte reversal check
+		readerWithTagger.verify();
 	}
+
 	/* Big bit stream (multiple read/write cycles of 16k */
 	{
 		xdevcfg.seek(0);
@@ -166,18 +195,22 @@ TEST(hardware_programmer, bin_file)
 	}
 	/* Truncated "bit" stream */
 	{
-		TestProgramTagCallback tagger;
-		dyplo::FpgaImageReader readerWithTagger(writer, &tagger);
+		FpgaImageReaderWithTagValidation readerWithTagger(writer);
 		xdevcfg.seek(0);
 		EQUAL(0, ::ftruncate(xdevcfg, 0));
 		bitstream.seek(0);
 		bitstreamToRead.seek(0);
 		EQUAL(0, ::ftruncate(bitstream, sizeof(valid_bit_bitstream) - 10));
 		ASSERT_THROW(readerWithTagger.processFile(bitstreamToRead), dyplo::TruncatedFileException);
-		/* Tags must still have been processed */
-		tagger.verify();
+		// Tags must still have been processed
+		readerWithTagger.verify();
 	}
 	::unlink("/tmp/xdevcfg");
+}
+
+TEST(hardware_programmer, check_static_id)
+{
+    
 }
 
 TEST(hardware_programmer, parse_description_tag)
@@ -186,27 +219,31 @@ TEST(hardware_programmer, parse_description_tag)
 	bool partial = false;
 	bool result;
 	static const char d1[] = "dyplo_wrapper;UserID=0X1234abcd\0";
-	result = dyplo::HardwareContext::parseDescriptionTag(d1, sizeof(d1), &partial, &user_id);
+
+	FpgaImageReaderCallbackMock mock;
+	FpgaImageReaderWithTagValidation reader(mock);
+
+	result = reader.parseDescriptionTag(d1, sizeof(d1), &partial, &user_id);
 	EQUAL(0x1234abcdu, user_id);
 	EQUAL(false, partial);
 	EQUAL(true, result);
 	static const char d2[] = "dyplo_wrapper;UserID=0xAB12;PARTIAL=TRUE\0";
-	result = dyplo::HardwareContext::parseDescriptionTag(d2, sizeof(d2), &partial, &user_id);
+	result = reader.parseDescriptionTag(d2, sizeof(d2), &partial, &user_id);
 	EQUAL(0xAB12u, user_id);
 	EQUAL(true, partial);
 	EQUAL(true, result);
 	static const char d3[] = "dyplo_wrapper;PARTIAL=FALSE;UserID=0x98765432";
-	result = dyplo::HardwareContext::parseDescriptionTag(d3, sizeof(d3), &partial, &user_id);
+	result = reader.parseDescriptionTag(d3, sizeof(d3), &partial, &user_id);
 	EQUAL(0x98765432, user_id);
 	EQUAL(false, partial);
 	EQUAL(true, result);
 	static const char d4[] = "dyplo_wrapper;PARTIAL=TRUE\0;NoUserID=42";
-	result = dyplo::HardwareContext::parseDescriptionTag(d4, sizeof(d4), &partial, &user_id);
+	result = reader.parseDescriptionTag(d4, sizeof(d4), &partial, &user_id);
 	EQUAL(true, partial);
 	EQUAL(false, result);
 	EQUAL(0x98765432, user_id);
-	/* user_id may be null, don't crash */
-	result = dyplo::HardwareContext::parseDescriptionTag(d3, sizeof(d3), &partial, NULL);
+	// user_id may be null, don't crash
+	result = reader.parseDescriptionTag(d3, sizeof(d3), &partial, NULL);
 	EQUAL(false, partial);
 	EQUAL(true, result);
 }

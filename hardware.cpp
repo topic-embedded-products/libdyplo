@@ -3,7 +3,7 @@
  *
  * Dyplo library for Kahn processing networks.
  *
- * (C) Copyright 2013,2014 Topic Embedded Products B.V. (http://www.topic.nl).
+ * (C) Copyright 2013-2016 Topic Embedded Products B.V. (http://www.topic.nl).
  * All rights reserved.
  *
  * This file is part of libdyplo.
@@ -197,36 +197,6 @@ namespace dyplo
 	static bool is_digit(const char c)
 	{
 		return (c >= '0') && (c <= '9');
-	}
-
-	bool HardwareContext::parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id)
-	{
-		const char* end;
-		bool result = false;
-		while (size)
-		{
-			end = (const char*)memchr(data, ';', size);
-			if (!end)
-				end = data + size;
-			if (!memcmp(data, "UserID=", 7))
-			{
-				if (user_id)
-				{
-					*user_id = strtoul(data + 7, NULL, 16);
-				}
-				result = true;
-			}
-			else if (is_partial && !memcmp(data, "PARTIAL=", 8))
-			{
-				*is_partial = data[8] == 'T';
-			}
-			size -= end - data;
-			if (!size)
-				return result;
-			data = end + 1;
-			--size;
-		}
-		return result;
 	}
 
 	static int parse_number_from_name(const char* name)
@@ -740,15 +710,69 @@ namespace dyplo
 		return output_file.write(data, length_bytes);
 	}
 
+	void FpgaImageFileWriter::verifyStaticID(const unsigned int user_id)
+	{
+		/* No need to check user ID here. */
+		(void)user_id;
+	}
+
+	bool FpgaImageReader::parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id)
+	{
+		const char* end;
+		bool result = false;
+		while (size)
+		{
+			end = (const char*)memchr(data, ';', size);
+			if (!end)
+				end = data + size;
+			if (!memcmp(data, "UserID=", 7))
+			{
+				if (user_id)
+				{
+					*user_id = strtoul(data + 7, NULL, 16);
+				}
+				result = true;
+			}
+			else if (is_partial && !memcmp(data, "PARTIAL=", 8))
+			{
+				*is_partial = data[8] == 'T';
+			}
+			size -= end - data;
+			if (!size)
+				return result;
+			data = end + 1;
+			--size;
+		}
+		return result;
+	}
+   
+	void FpgaImageReader::processTag(char tag, unsigned short size, const void* data)
+	{
+		if (tag == 'a')
+		{
+			unsigned int user_id;
+			bool is_partial = true; // for now, assumption is that the user only programs partials via the available ICAP interface
+			bool has_user_id = parseDescriptionTag((const char*)data, size, &is_partial, &user_id);
+			if (has_user_id && is_partial)
+			{
+				callback.verifyStaticID(user_id);
+			}
+		}
+	}
+
 	size_t FpgaImageReader::processFile(File& fpgaImageFile)
 	{
 		size_t total_data_bytes_processed = 0;
 
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
 		unsigned char* buffer_start = &buffer[0];
+		
 		ssize_t bytes = fpgaImageFile.read_all(buffer_start, ALIGN_SIZE);
 		if (bytes < 64)
+		{
 			throw TruncatedFileException();
+		}
+        
 		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */
 			(parse_u16(buffer_start + 11) == 1) &&
 			(buffer[13] == 'a'))
@@ -756,32 +780,45 @@ namespace dyplo
 			/* It's a bitstream, convert and flash */
 			const unsigned char* end = buffer_start + bytes;
 			unsigned char* data = buffer_start + 13;
+            
 			/* Browse through tag/value pairs looking for the "e" */
 			for(;;)
 			{
 				unsigned char tag = *data;
 				if (tag == 'e') /* Data tag, stop here */
+                {
 					break;
-				++data;
+                }
+				
+                ++data;
 				if (data >= end)
+                {
 					throw TruncatedFileException();
-				unsigned short sz = parse_u16(data);
+                }
+                
+				unsigned short length = parse_u16(data);
 				unsigned char* value = data + 2;
-				data = value + sz;
+				data = value + length;
 				if (data >= end)
+                {
 					throw TruncatedFileException();
+                }
 
-				if (tag_callback)
-					tag_callback->processTag(tag, sz, value);
+				processTag(tag, length, value);
 			}
+            
 			++data;
 			if (data+4 >= end)
+            {
 				throw TruncatedFileException();
+            }
+            
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			total_data_bytes_processed = size;
 			data += 4;
 			unsigned int total_bytes = bytes - (data - buffer_start);
-			/* Move the remaining data to the buffer start to align
+			
+            /* Move the remaining data to the buffer start to align
 			 * it on word boundary. */
 			memmove(buffer_start, data, total_bytes);
 			if (total_bytes >= size)
@@ -798,24 +835,36 @@ namespace dyplo
 					align = ALIGN_SIZE - align; /* number of bytes to read */
 					bytes = fpgaImageFile.read_all(buffer_start + total_bytes, align);
 					if (bytes < align)
+                    {
 						throw TruncatedFileException();
+                    }
 					total_bytes += align;
 				}
 			}
+            
 			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
 			bytes = callback.processData(buffer_start, total_bytes);
 			if (bytes < total_bytes)
+            {
 				throw TruncatedFileException();
+            }
+            
 			while (total_bytes < size)
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
 				bytes = fpgaImageFile.read_all(buffer_start, to_read);
 				if (bytes < to_read)
+                {
 					throw TruncatedFileException();
+                }
+                
 				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
 				bytes = callback.processData(buffer_start, to_read);
 				if (bytes < to_read)
+                {
 					throw TruncatedFileException();
+                }
+                    
 				total_bytes += bytes;
 			}
 		}
@@ -824,13 +873,18 @@ namespace dyplo
 			/* Probably a bin file, they tend to start with all FF...
 			 * so that seems a reasonable sanity check. */
 			if (*(unsigned int*)buffer_start != 0xFFFFFFFF)
+            {
 				throw std::runtime_error("Unrecognized bitstream format");
+            }
 
 			do
 			{
 				ssize_t bytes_written = callback.processData(buffer_start, bytes);
 				if (bytes_written < bytes)
+                {
 					throw TruncatedFileException();
+                }
+                
 				total_data_bytes_processed += bytes;
 				bytes = fpgaImageFile.read_all(buffer_start, BUFFER_SIZE);
 			}
@@ -844,45 +898,12 @@ namespace dyplo
 	static const unsigned int programmer_numblocks = 2;
 	static const unsigned int icap_nop_instruction = 0x20000000U;
 
-	FpgaImageIdValidator::FpgaImageIdValidator(HardwareContext& context, HardwareControl& control) :
-		ctx(context),
-		ctrl(control),
-		dyplo_user_id_valid(false)
-	{
-	}
-
-	void FpgaImageIdValidator::processTag(char tag, unsigned short size, const void* data)
-	{
-		if (tag == 'a')
-		{
-			unsigned int user_id;
-			bool is_partial = true; // for now, assumption is that the user only programs partials via the available ICAP interface
-			bool has_user_id = dyplo::HardwareContext::parseDescriptionTag((const char*)data, size, &is_partial, &user_id);
-			if (has_user_id && is_partial)
-			{
-				if (getDyploStaticID() != user_id)
-				{
-					throw StaticPartialIDMismatchException();
-				}
-			}
-		}
-	}
-
-	unsigned int FpgaImageIdValidator::getDyploStaticID()
-	{
-		if (!dyplo_user_id_valid)
-		{
-			dyplo_user_id = ctrl.readDyploStaticID();
-			dyplo_user_id_valid = true;
-		}
-		return dyplo_user_id;
-	}
-
 	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control) :
 		dma_writer(NULL),
 		cpu_fifo(NULL),
-		validator(context, control),
-		reader(*this, &validator)
+		control(control),
+		reader(*this),
+        dyplo_user_id_valid(false)
 	{
 		// check if there is an ICAP node
 		int icap = control.getIcapNodeIndex();
@@ -913,7 +934,8 @@ namespace dyplo
 				dma_writer->reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
 					programmer_blocksize, programmer_numblocks, false);
 				dma_writer->addRouteTo(icap);
-			} else if (cpu_fifo != NULL)
+			} 
+            else if (cpu_fifo != NULL)
 			{
 				cpu_fifo->addRouteTo(icap);
 			}
@@ -923,7 +945,18 @@ namespace dyplo
 			throw IOException("No ICAP");
 		}
 	}
-
+    
+    unsigned int HardwareProgrammer::getDyploStaticID()
+	{
+		if (!dyplo_user_id_valid)
+		{
+			dyplo_user_id = control.readDyploStaticID();
+			dyplo_user_id_valid = true;
+		}
+        
+		return dyplo_user_id;
+	}
+    
 	HardwareProgrammer::~HardwareProgrammer()
 	{
 		sendNOP(ESTIMATED_FIFO_SIZE);
@@ -1001,6 +1034,7 @@ namespace dyplo
 		{
 			HardwareDMAFifo::Block *block = dma_writer->dequeue();
 			memcpy(block->data, data, length_bytes);
+            
 			/* Workaround for DMA node only supporting 64-bit writes */
 			size_t length_dma_block = length_bytes;
 			if (length_dma_block % 8)
@@ -1022,8 +1056,11 @@ namespace dyplo
 		return 0;
 	}
 
-
-
-
-
+    void HardwareProgrammer::verifyStaticID(const unsigned int user_id)
+    {
+        if (getDyploStaticID() != user_id)
+        {
+            throw StaticPartialIDMismatchException();
+        }        
+    }
 }

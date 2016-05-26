@@ -35,12 +35,6 @@
 
 namespace dyplo
 {
-	class ProgramTagCallback
-	{
-	public:
-		virtual void processTag(char tag, unsigned short size, const void *data) = 0;
-	};
-
 	class HardwareContext
 	{
 	public:
@@ -56,8 +50,6 @@ namespace dyplo
 		int openAvailableDMA(int access);
 		int openAvailableWriteFifo();
 		int openAvailableReadFifo();
-
-		static bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 
 		/* Find bitfiles in directories */
 		unsigned int getAvailablePartitions(const char* function);
@@ -231,6 +223,7 @@ namespace dyplo
 	public:
 		// returns amount of bytes processed
 		virtual ssize_t processData(const void* data, const size_t length_bytes) = 0;
+		virtual void verifyStaticID(const unsigned int user_id) = 0;
 	};
 
 	class FpgaImageFileWriter : public FpgaImageReaderCallback
@@ -246,7 +239,9 @@ namespace dyplo
 			output_file.flush();
 		}
 
+        // FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
+        virtual void verifyStaticID(const unsigned int user_id);
 	private:
 		File& output_file;
 	};
@@ -259,36 +254,21 @@ namespace dyplo
 	class FpgaImageReader
 	{
 	public:
-		FpgaImageReader(FpgaImageReaderCallback& resultCallback, ProgramTagCallback* tagCallback = NULL) :
-			callback(resultCallback),
-			tag_callback(tagCallback)
+		FpgaImageReader(FpgaImageReaderCallback& resultCallback) :
+			callback(resultCallback)
 		{
 		}
 
 		// returns amount of bytes read
 		size_t processFile(File& fpgaImageFile);
-
-	private:
-		FpgaImageReaderCallback& callback;
-		ProgramTagCallback*      tag_callback;
-	};
-
-	class FpgaImageIdValidator: public dyplo::ProgramTagCallback
-	{
-	public:
-		FpgaImageIdValidator(dyplo::HardwareContext &context, dyplo::HardwareControl &control);
-
-		// ProgramTagCallback interface
+        
+	protected:
+		virtual bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 		virtual void processTag(char tag, unsigned short size, const void *data);
 
 	private:
-		dyplo::HardwareContext &ctx;
-		dyplo::HardwareControl &ctrl;
-		unsigned int dyplo_user_id;
-		bool dyplo_user_id_valid;
-
-		unsigned int getDyploStaticID();
-	};
+		FpgaImageReaderCallback& callback;
+    };
 
 	// can program via ICAP
 	class HardwareProgrammer : public FpgaImageReaderCallback
@@ -303,6 +283,7 @@ namespace dyplo
 
 		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
+        virtual void verifyStaticID(const unsigned int user_id);
 	protected:
 		// for DMA data stream to ICAP
 		HardwareDMAFifo* dma_writer;
@@ -312,9 +293,13 @@ namespace dyplo
 	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);
+		unsigned int getDyploStaticID();
 
-		FpgaImageIdValidator validator;
+		HardwareControl& control;
 		FpgaImageReader reader;
+
+		unsigned int dyplo_user_id;
+		bool dyplo_user_id_valid;
 	};
 
 }
