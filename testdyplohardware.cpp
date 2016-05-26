@@ -56,8 +56,16 @@ public:
 
 static const unsigned char invalid_bitstream[64] =
 	{0}; /* Not valid for any type */
+
 static const unsigned char valid_bin_bitstream[128] =
 	{0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4, 5, 6, 7, 8}; /* Valid binary bitstream */
+
+static const unsigned char valid_partial_bitstream[128] =
+	{0x00, 1, 2, 3, 0xFF, 0xFF, 0xFF, 0xFF, 1, 2, 3, 4, 5, 6, 7, 8};
+
+static const unsigned char invalid_partial_bitstream[128] =
+	{0x00, 0xAA, 0xAA, 0xAA, 0xFF, 0xFF, 0xFF, 0xFE, 1, 2, 3, 4, 5, 6, 7, 8};
+
 static const unsigned char valid_bit_bitstream[128] = {
 	0x00, 0x09, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00, 0x00, 0x01, 0x61, 0x00, 0x20,
 	0x64, 0x79, 0x70, 0x6c, 0x6f, 0x5f, 0x77, 0x72, 0x61, 0x70, 0x70, 0x65, 0x72, 0x3b, 0x55, 0x73,
@@ -208,9 +216,47 @@ TEST(hardware_programmer, bin_file)
 	::unlink("/tmp/xdevcfg");
 }
 
-TEST(hardware_programmer, check_static_id)
+// testing .partial support by FpgaImageReader
+TEST(hardware_programmer, partial_file)
 {
-    
+	TestContext tc;
+
+	const char* bitstreamPath = "/tmp/bitstream";
+
+	dyplo::File xdevcfg(::open("/tmp/xdevcfg", O_CREAT | O_RDWR, S_IRUSR|S_IWUSR));
+	dyplo::File bitstream(::open(bitstreamPath, O_CREAT | O_WRONLY, S_IRUSR|S_IWUSR));
+	dyplo::File bitstreamToRead = dyplo::File(::open(bitstreamPath, O_RDONLY));
+	dyplo::FpgaImageFileWriter writer(xdevcfg);
+	dyplo::FpgaImageReader reader(writer);
+
+	// Valid "partial" stream
+	{
+		dyplo::FpgaImageReader readerWithTagger(writer);
+		xdevcfg.seek(0);
+		EQUAL(0, ::ftruncate(xdevcfg, 0));
+		bitstream.seek(0);
+		bitstream.write(valid_partial_bitstream, sizeof(valid_partial_bitstream));
+		bitstreamToRead.seek(0);
+		unsigned int expected_size = sizeof(valid_partial_bitstream) - 4; // the first 32-bits are the header of the .partial file
+		EQUAL(expected_size, readerWithTagger.processFile(bitstreamToRead));
+		std::vector<unsigned char> buffer(sizeof(valid_partial_bitstream));
+		xdevcfg.seek(0);
+		EQUAL(expected_size, xdevcfg.read(&buffer[0], expected_size)); // Properly truncated
+		CHECK(memcmp(&valid_partial_bitstream[4], &buffer[0], expected_size) == 0);
+	}
+
+	// Invalid "partial" stream
+	{
+		dyplo::FpgaImageReader readerWithTagger(writer);
+		xdevcfg.seek(0);
+		EQUAL(0, ::ftruncate(xdevcfg, 0));
+		bitstream.seek(0);
+		bitstream.write(invalid_partial_bitstream, sizeof(invalid_partial_bitstream));
+		bitstreamToRead.seek(0);
+		ASSERT_THROW(readerWithTagger.processFile(bitstreamToRead), std::runtime_error);
+	}
+
+	::unlink("/tmp/xdevcfg");
 }
 
 TEST(hardware_programmer, parse_description_tag)
@@ -295,15 +341,32 @@ TEST(hardware_programmer, find_bitstreams)
 	f.file("/tmp/dyplo_func_2/2.bit");
 	f.file("/tmp/dyplo_func_2/function2partition12.bit");
 	f.file("/tmp/dyplo_func_2/2-21-and-more.bit");
+	f.dir("/tmp/dyplo_func_3");
+	f.file("/tmp/dyplo_func_3/only1last2digits3matter1.partial");
+	f.file("/tmp/dyplo_func_3/2.bit");
+	f.file("/tmp/dyplo_func_3/2.partial");
+	f.file("/tmp/dyplo_func_3/2.bit.bin");
+	f.file("/tmp/dyplo_func_3/function2partition12.partial");
+	f.file("/tmp/dyplo_func_3/21-and-more.bot");
 	unsigned int parts;
 	context.setBitstreamBasepath("/tmp");
 	parts = context.getAvailablePartitions("dyplo_func_1");
 	EQUAL((unsigned)(1<<31)|(1<<13)|(1<<2)|(1<<1), parts);
 	parts = context.getAvailablePartitions("dyplo_func_2");
 	EQUAL((unsigned)(1<<21)|(1<<12)|(1<<2)|(1<<1), parts);
+	parts = context.getAvailablePartitions("dyplo_func_3");
+	EQUAL((unsigned)(1<<21)|(1<<12)|(1<<2)|(1<<1), parts);
 	std::string filename;
 	filename = context.findPartition("dyplo_func_2", 12);
 	EQUAL("/tmp/dyplo_func_2/function2partition12.bit", filename);
 	filename = context.findPartition("dyplo_func_2", 11);
 	EQUAL("", filename); /* not found */
+	filename = context.findPartition("dyplo_func_3", 2);
+	EQUAL("/tmp/dyplo_func_3/2.partial", filename);
+	filename = context.findPartition("dyplo_func_3", 12);
+	EQUAL("/tmp/dyplo_func_3/function2partition12.partial", filename);
+	filename = context.findPartition("dyplo_func_3", 21);
+	EQUAL("/tmp/dyplo_func_3/21-and-more.bot", filename);
+	filename = context.findPartition("dyplo_func_3", 22);
+	EQUAL("", filename); // not found
 }

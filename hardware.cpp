@@ -34,11 +34,14 @@
 #include <errno.h>
 #include <sstream>
 #include <vector>
+#include <list>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fstream>
 #include <assert.h>
+
+#include <iostream>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 
@@ -259,6 +262,7 @@ namespace dyplo
 	{
 		DirectoryListing dir(path);
 		struct dirent *entry;
+		std::list<std::string> possible_partitions;
 		while ((entry = dir.next()) != NULL)
 		{
 			switch (entry->d_type)
@@ -268,9 +272,37 @@ namespace dyplo
 				case DT_UNKNOWN:
 					int index = parse_number_from_name(entry->d_name);
 					if (index == partition)
-						return std::string(path) + '/' + entry->d_name;
+					{
+						possible_partitions.push_back(std::string(path) + '/' + entry->d_name);
+					}
 			}
 		}
+
+		if (possible_partitions.size() == 1)
+		{
+			// immediately return the first partition in case of only one result
+			return possible_partitions.front();
+		}
+		else if (!possible_partitions.empty())
+		{
+			// multiple possible partitions found.. use the '.partial' file if it is available
+			const std::string PARTIAL_POSTFIX(".partial");
+			for (std::list<std::string>::const_iterator it = possible_partitions.begin(); it != possible_partitions.end(); ++it)
+			{
+				const std::string& partition_name = *it;
+
+				// check if the partition_name ends with .partial
+				if (partition_name.length() > PARTIAL_POSTFIX.length() &&
+					partition_name.rfind(PARTIAL_POSTFIX) == (partition_name.length() - PARTIAL_POSTFIX.length()))
+				{
+					return partition_name;
+				}
+			}
+
+			// no '.partial' partitions found, return first possibility
+			return possible_partitions.front();
+		}
+
 		return "";
 	}
 
@@ -786,39 +818,39 @@ namespace dyplo
 			{
 				unsigned char tag = *data;
 				if (tag == 'e') /* Data tag, stop here */
-                {
+				{
 					break;
-                }
+				}
 				
-                ++data;
+				++data;
 				if (data >= end)
-                {
+				{
 					throw TruncatedFileException();
-                }
+				}
                 
 				unsigned short length = parse_u16(data);
 				unsigned char* value = data + 2;
 				data = value + length;
 				if (data >= end)
-                {
+				{
 					throw TruncatedFileException();
-                }
+				}
 
 				processTag(tag, length, value);
 			}
             
 			++data;
 			if (data+4 >= end)
-            {
+			{
 				throw TruncatedFileException();
-            }
+			}
             
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			total_data_bytes_processed = size;
 			data += 4;
 			unsigned int total_bytes = bytes - (data - buffer_start);
 			
-            /* Move the remaining data to the buffer start to align
+			/* Move the remaining data to the buffer start to align
 			 * it on word boundary. */
 			memmove(buffer_start, data, total_bytes);
 			if (total_bytes >= size)
@@ -835,9 +867,9 @@ namespace dyplo
 					align = ALIGN_SIZE - align; /* number of bytes to read */
 					bytes = fpgaImageFile.read_all(buffer_start + total_bytes, align);
 					if (bytes < align)
-                    {
+					{
 						throw TruncatedFileException();
-                    }
+					}
 					total_bytes += align;
 				}
 			}
@@ -845,45 +877,63 @@ namespace dyplo
 			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
 			bytes = callback.processData(buffer_start, total_bytes);
 			if (bytes < total_bytes)
-            {
+			{
 				throw TruncatedFileException();
-            }
+			}
             
 			while (total_bytes < size)
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
 				bytes = fpgaImageFile.read_all(buffer_start, to_read);
 				if (bytes < to_read)
-                {
+				{
 					throw TruncatedFileException();
-                }
+				}
                 
 				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
 				bytes = callback.processData(buffer_start, to_read);
 				if (bytes < to_read)
-                {
+				{
 					throw TruncatedFileException();
-                }
+				}
                     
 				total_bytes += bytes;
 			}
 		}
 		else
 		{
-			/* Probably a bin file, they tend to start with all FF...
-			 * so that seems a reasonable sanity check. */
-			if (*(unsigned int*)buffer_start != 0xFFFFFFFF)
-            {
+			if (*(unsigned int*)buffer_start == 0xFFFFFFFF)
+			{
+				/* Probably a bin file, they tend to start with all FF...
+				 * so that seems a reasonable sanity check. */
+			}
+			else if (buffer_start[0] == 0x00 &&
+					 *(unsigned int*)(&buffer_start[4]) == 0xFFFFFFFF)
+			{
+				/* Probably a .partial file, starts with 32-bit header:
+				   Header format: (Hex) 00 {node_index} {static_image_id MSB} {static_image_id LSB}.
+				   After the header, the .partial file should be like a .bin file, so it should start with FFFFFFFF. */
+
+				// verify with static ID
+				unsigned int partial_id = static_cast<unsigned int>(parse_u16(&buffer_start[2]));
+				callback.verifyStaticID(partial_id);
+
+				// move buffer_start to a position after the header
+				buffer_start = &buffer_start[4];
+				bytes -= 4;
+			}
+			else
+			{
 				throw std::runtime_error("Unrecognized bitstream format");
-            }
+			}
 
 			do
 			{
 				ssize_t bytes_written = callback.processData(buffer_start, bytes);
 				if (bytes_written < bytes)
-                {
+				{
 					throw TruncatedFileException();
-                }
+				}
                 
 				total_data_bytes_processed += bytes;
 				bytes = fpgaImageFile.read_all(buffer_start, BUFFER_SIZE);
@@ -903,7 +953,7 @@ namespace dyplo
 		cpu_fifo(NULL),
 		control(control),
 		reader(*this),
-        dyplo_user_id_valid(false)
+		dyplo_user_id_valid(false)
 	{
 		// check if there is an ICAP node
 		int icap = control.getIcapNodeIndex();
@@ -935,7 +985,7 @@ namespace dyplo
 					programmer_blocksize, programmer_numblocks, false);
 				dma_writer->addRouteTo(icap);
 			} 
-            else if (cpu_fifo != NULL)
+			else if (cpu_fifo != NULL)
 			{
 				cpu_fifo->addRouteTo(icap);
 			}
@@ -946,7 +996,7 @@ namespace dyplo
 		}
 	}
     
-    unsigned int HardwareProgrammer::getDyploStaticID()
+	unsigned int HardwareProgrammer::getDyploStaticID()
 	{
 		if (!dyplo_user_id_valid)
 		{

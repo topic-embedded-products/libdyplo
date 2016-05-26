@@ -250,7 +250,7 @@ namespace dyplo
 	static const size_t BUFFER_SIZE = 8 * ALIGN_SIZE;
 	static const size_t ESTIMATED_FIFO_SIZE = 256;
 
-	// can read .bit and .bin files and will output the data to be flashed on the FPGA
+	// can read .bit and .bin and .partial files and will output the data to be flashed on the FPGA
 	class FpgaImageReader
 	{
 	public:
@@ -259,7 +259,7 @@ namespace dyplo
 		{
 		}
 
-		// returns amount of bytes read
+		// returns amount of bytes of FPGA data read
 		size_t processFile(File& fpgaImageFile);
         
 	protected:
