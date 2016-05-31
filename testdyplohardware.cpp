@@ -237,12 +237,12 @@ TEST(hardware_programmer, partial_file)
 		bitstream.seek(0);
 		bitstream.write(valid_partial_bitstream, sizeof(valid_partial_bitstream));
 		bitstreamToRead.seek(0);
-		unsigned int expected_size = sizeof(valid_partial_bitstream) - 4; // the first 32-bits are the header of the .partial file
+		unsigned int expected_size = sizeof(valid_partial_bitstream); // the first 32-bits are the header of the .partial file
 		EQUAL(expected_size, readerWithTagger.processFile(bitstreamToRead));
 		std::vector<unsigned char> buffer(sizeof(valid_partial_bitstream));
 		xdevcfg.seek(0);
 		EQUAL(expected_size, xdevcfg.read(&buffer[0], expected_size)); // Properly truncated
-		CHECK(memcmp(&valid_partial_bitstream[4], &buffer[0], expected_size) == 0);
+		CHECK(memcmp(valid_partial_bitstream, &buffer[0], expected_size) == 0);
 	}
 
 	// Invalid "partial" stream
