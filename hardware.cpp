@@ -917,10 +917,6 @@ namespace dyplo
 				// verify with static ID
 				unsigned int partial_id = static_cast<unsigned int>(parse_u16(&buffer_start[2]));
 				callback.verifyStaticID(partial_id);
-
-				// move buffer_start to a position after the header
-				buffer_start = &buffer_start[4];
-				bytes -= 4;
 			}
 			else
 			{
@@ -1107,10 +1103,10 @@ namespace dyplo
 	}
 
     void HardwareProgrammer::verifyStaticID(const unsigned int user_id)
-    {
-        if (getDyploStaticID() != user_id)
-        {
-            throw StaticPartialIDMismatchException();
-        }        
-    }
+	{
+		if (getDyploStaticID() != user_id)
+		{
+			throw StaticPartialIDMismatchException();
+		}
+	}
 }
