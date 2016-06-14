@@ -93,7 +93,7 @@ namespace dyplo
 		void disableNodes(unsigned int mask);
 		void writeDyploLicense(unsigned long long license_blob);
 		void writeDyploLicenseFile(const char* path_to_dyplo_license_file);
-		unsigned int readDyploStaticID();
+		unsigned short readDyploStaticID();
 
 		bool isNodeEnabled(int node) { return (getEnabledNodes() & (1<<node)) != 0; }
 		void enableNode(int node) { enableNodes(1<<node); }
@@ -223,7 +223,7 @@ namespace dyplo
 	public:
 		// returns amount of bytes processed
 		virtual ssize_t processData(const void* data, const size_t length_bytes) = 0;
-		virtual void verifyStaticID(const unsigned int user_id) = 0;
+		virtual void verifyStaticID(const unsigned short user_id) = 0;
 	};
 
 	class FpgaImageFileWriter : public FpgaImageReaderCallback
@@ -241,7 +241,7 @@ namespace dyplo
 
         // FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
-        virtual void verifyStaticID(const unsigned int user_id);
+        virtual void verifyStaticID(const unsigned short user_id);
 	private:
 		File& output_file;
 	};
@@ -283,7 +283,7 @@ namespace dyplo
 
 		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
-        virtual void verifyStaticID(const unsigned int user_id);
+        virtual void verifyStaticID(const unsigned short user_id);
 	protected:
 		// for DMA data stream to ICAP
 		HardwareDMAFifo* dma_writer;
@@ -293,12 +293,12 @@ namespace dyplo
 	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);
-		unsigned int getDyploStaticID();
+		unsigned short getDyploStaticID();
 
 		HardwareControl& control;
 		FpgaImageReader reader;
 
-		unsigned int dyplo_user_id;
+		unsigned short dyplo_user_id;
 		bool dyplo_user_id_valid;
 	};
 

@@ -87,7 +87,7 @@ public:
 		// do nothing
 	}
 
-	virtual void verifyStaticID(const unsigned int user_id)
+	virtual void verifyStaticID(const unsigned short user_id)
 	{
 		// do nothing
 	}

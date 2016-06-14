@@ -416,12 +416,12 @@ namespace dyplo
 		writeDyploLicense(hash);
 	}
 
-	unsigned int HardwareControl::readDyploStaticID()
+	unsigned short HardwareControl::readDyploStaticID()
 	{
 		unsigned int data;
 		if (::ioctl(handle, DYPLO_IOCGSTATIC_ID, &data) < 0)
 			throw IOException(__func__);
-		return data;
+		return (unsigned short)data;
 	}
 
 	int HardwareControl::getIcapNodeIndex()
@@ -742,7 +742,7 @@ namespace dyplo
 		return output_file.write(data, length_bytes);
 	}
 
-	void FpgaImageFileWriter::verifyStaticID(const unsigned int user_id)
+	void FpgaImageFileWriter::verifyStaticID(const unsigned short user_id)
 	{
 		/* No need to check user ID here. */
 		(void)user_id;
@@ -787,7 +787,7 @@ namespace dyplo
 			bool has_user_id = parseDescriptionTag((const char*)data, size, &is_partial, &user_id);
 			if (has_user_id && is_partial)
 			{
-				callback.verifyStaticID(user_id);
+				callback.verifyStaticID((unsigned short)user_id);
 			}
 		}
 	}
@@ -915,7 +915,7 @@ namespace dyplo
 				   After the header, the .partial file should be like a .bin file, so it should start with FFFFFFFF. */
 
 				// verify with static ID
-				unsigned int partial_id = static_cast<unsigned int>(parse_u16(&buffer_start[2]));
+				unsigned short partial_id = parse_u16(&buffer_start[2]);
 				callback.verifyStaticID(partial_id);
 			}
 			else
@@ -992,7 +992,7 @@ namespace dyplo
 		}
 	}
     
-	unsigned int HardwareProgrammer::getDyploStaticID()
+	unsigned short HardwareProgrammer::getDyploStaticID()
 	{
 		if (!dyplo_user_id_valid)
 		{
@@ -1102,7 +1102,7 @@ namespace dyplo
 		return 0;
 	}
 
-    void HardwareProgrammer::verifyStaticID(const unsigned int user_id)
+    void HardwareProgrammer::verifyStaticID(const unsigned short user_id)
 	{
 		if (getDyploStaticID() != user_id)
 		{
