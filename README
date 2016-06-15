@@ -14,8 +14,9 @@ repository), you'll need autotools as well. On a standard Ubuntu setup
 the command to get these prerequisites is:
   sudo apt-get install build-essential autoconf libtool
 
-The project uses autotools, so if you're familiar with that, you may
-already know what to do.
+To create the "configure" script, run:
+
+  autoreconf --install
 
 To manually build the software, run the configure script, which will
 create the makefile, and then run make to build the software. The
@@ -26,6 +27,14 @@ make
 
 Run "./configure --help" to list options. For faster building, supply a
 "-j" parameter to make to use multiple cores, e.g. "make -j 4".
+
+To build outside the repository, just refer to the "configure" script
+using a relative path. For example, to build in a "build" directory:
+
+mkdir build
+cd build
+../configure
+make -j4
 
 
 RUNNING TESTS
