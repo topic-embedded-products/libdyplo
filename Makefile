@@ -10,8 +10,8 @@ C_PIECES=
 C_FILES=$(C_PIECES:%=%.c)
 C_O_FILES=$(C_PIECES:%=${ARCH}/%.o)
 
-CC_PIECES=
-CC_FILES=$(CC_PIECES:%=%.cc)
+CC_PIECES=pthreadscheduler
+CC_FILES=$(CC_PIECES:%=%.cpp)
 CC_O_FILES=$(CC_PIECES:%=${ARCH}/%.o)
 
 H_FILES=
