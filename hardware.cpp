@@ -115,7 +115,7 @@ namespace dyplo
 		for (;;)
 		{
 			int char_amount_requested = snprintf(filename, sizeof(filename), pattern, result);
-			assert(char_amount_requested < sizeof(filename));
+			assert(char_amount_requested < (int)sizeof(filename));
 			if (::access(filename, F_OK) != 0)
 				return result;
 			++result;
@@ -185,14 +185,15 @@ namespace dyplo
 		return (data[0] << 8) | data[1];
 	}
 
-	static void swap_buffer_aligned(unsigned int* buffer, unsigned int size)
+	static void swap_buffer_aligned(unsigned int* dst, const unsigned int* src, unsigned int size)
 	{
 		while (size)
 		{
 			/* Flip the bytes (gcc will recognize this as a "bswap") */
-			unsigned int x = *buffer;
-			*buffer = (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
-			++buffer;
+			unsigned int x = *src;
+			*dst = (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
+			++src;
+			++dst;
 			--size;
 		}
 	}
@@ -737,9 +738,28 @@ namespace dyplo
 		return !memcmp(&lhs, &rhs, sizeof(lhs));
 	}
 
-	ssize_t FpgaImageFileWriter::processData(const void* data, const size_t length_bytes)
+
+	FpgaImageFileWriter::FpgaImageFileWriter(File& output):
+		output_file(output),
+		buffer(malloc(BUFFER_SIZE))
 	{
-		return output_file.write(data, length_bytes);
+	}
+
+	FpgaImageFileWriter::~FpgaImageFileWriter()
+	{
+		free(buffer);
+		output_file.flush();
+	}
+
+	size_t FpgaImageFileWriter::beginProcessData(void **data, size_t bytes_remaining)
+	{
+		*data = buffer;
+		return bytes_remaining > BUFFER_SIZE ? BUFFER_SIZE : bytes_remaining;
+	}
+
+	ssize_t FpgaImageFileWriter::endProcessData(size_t length_bytes)
+	{
+		return output_file.write(buffer, length_bytes);
 	}
 
 	void FpgaImageFileWriter::verifyStaticID(const unsigned short user_id)
@@ -786,9 +806,7 @@ namespace dyplo
 			bool is_partial = true; // for now, assumption is that the user only programs partials via the available ICAP interface
 			bool has_user_id = parseDescriptionTag((const char*)data, size, &is_partial, &user_id);
 			if (has_user_id && is_partial)
-			{
 				callback.verifyStaticID((unsigned short)user_id);
-			}
 		}
 	}
 
@@ -798,12 +816,11 @@ namespace dyplo
 
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
 		unsigned char* buffer_start = &buffer[0];
+		void* cb_buffer;
 
 		ssize_t bytes = fpgaImageFile.read_all(buffer_start, ALIGN_SIZE);
 		if (bytes < 64)
-		{
 			throw TruncatedFileException();
-		}
 
 		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */
 			(parse_u16(buffer_start + 11) == 1) &&
@@ -824,26 +841,20 @@ namespace dyplo
 
 				++data;
 				if (data >= end)
-				{
 					throw TruncatedFileException();
-				}
 
 				unsigned short length = parse_u16(data);
 				unsigned char* value = data + 2;
 				data = value + length;
 				if (data >= end)
-				{
 					throw TruncatedFileException();
-				}
 
 				processTag(tag, length, value);
 			}
 
 			++data;
 			if (data+4 >= end)
-			{
 				throw TruncatedFileException();
-			}
 
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			total_data_bytes_processed = size;
@@ -867,35 +878,28 @@ namespace dyplo
 					align = ALIGN_SIZE - align; /* number of bytes to read */
 					bytes = fpgaImageFile.read_all(buffer_start + total_bytes, align);
 					if (bytes < align)
-					{
 						throw TruncatedFileException();
-					}
 					total_bytes += align;
 				}
 			}
 
-			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
-			bytes = callback.processData(buffer_start, total_bytes);
+			total_bytes = callback.beginProcessData(&cb_buffer, total_bytes);
+			swap_buffer_aligned((unsigned int*)cb_buffer, (unsigned int*)buffer_start, total_bytes >> 2);
+			bytes = callback.endProcessData(total_bytes);
 			if (bytes < total_bytes)
-			{
 				throw TruncatedFileException();
-			}
 
 			while (total_bytes < size)
 			{
-				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
+				size_t to_read = callback.beginProcessData(&cb_buffer, size - total_bytes);
 				bytes = fpgaImageFile.read_all(buffer_start, to_read);
-				if (bytes < to_read)
-				{
+				if (bytes < (ssize_t)to_read)
 					throw TruncatedFileException();
-				}
 
-				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
-				bytes = callback.processData(buffer_start, to_read);
-				if (bytes < to_read)
-				{
+				swap_buffer_aligned((unsigned int*)cb_buffer, (unsigned int*)buffer_start, bytes >> 2);
+				bytes = callback.endProcessData(to_read);
+				if (bytes < (ssize_t)to_read)
 					throw TruncatedFileException();
-				}
 
 				total_bytes += bytes;
 			}
@@ -923,18 +927,23 @@ namespace dyplo
 				throw std::runtime_error("Unrecognized bitstream format");
 			}
 
-			do
+			// copy first block into buffer using memcpy
+			total_data_bytes_processed = callback.beginProcessData(&cb_buffer, bytes);
+			memcpy(cb_buffer, buffer_start, total_data_bytes_processed);
+			if (callback.endProcessData(bytes) < bytes)
+				throw TruncatedFileException();
+			// Move the rest through the buffer interface directly
+			for(;;)
 			{
-				ssize_t bytes_written = callback.processData(buffer_start, bytes);
+				callback.beginProcessData(&cb_buffer, BUFFER_SIZE);
+				bytes = fpgaImageFile.read_all(cb_buffer, BUFFER_SIZE);
+				if (!bytes)
+					break;
+				ssize_t bytes_written = callback.endProcessData(bytes);
 				if (bytes_written < bytes)
-				{
 					throw TruncatedFileException();
-				}
-
-				total_data_bytes_processed += bytes;
-				bytes = fpgaImageFile.read_all(buffer_start, BUFFER_SIZE);
+				total_data_bytes_processed += bytes_written;
 			}
-			while (bytes);
 		}
 
 		return total_data_bytes_processed;
@@ -946,7 +955,9 @@ namespace dyplo
 
 	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control) :
 		dma_writer(NULL),
+		block(NULL),
 		cpu_fifo(NULL),
+		cpu_buffer(NULL),
 		control(control),
 		reader(*this),
 		dyplo_user_id_valid(false)
@@ -1011,16 +1022,15 @@ namespace dyplo
 		if (dma_writer != NULL)
 		{
 			dma_writer->flush();
+			delete dma_writer;
 		}
 
 		/* Flush data written to CPU fifo */
 		if (cpu_fifo != NULL)
 		{
 			cpu_fifo->flush();
+			delete cpu_fifo;
 		}
-
-		delete dma_writer;
-		delete cpu_fifo;
 	}
 
 	unsigned int HardwareProgrammer::fromFile(const char *filename)
@@ -1046,7 +1056,8 @@ namespace dyplo
 			 * internal queues, so that any data still in those queues
 			 * has been written to ICAP, and only the NOP commands remain
 			 * in the Dyplo queues. */
-			HardwareDMAFifo::Block *block = dma_writer->dequeue();
+			if (!block)
+				block = dma_writer->dequeue();
 
 			if (bytes > block->size) {
 				bytes = block->size;
@@ -1057,6 +1068,7 @@ namespace dyplo
 			for (unsigned int i = 0; i < count; ++i)
 				data[i] = icap_nop_instruction;
 			dma_writer->enqueue(block);
+			block = NULL;
 
 			return count;
 		}
@@ -1074,13 +1086,29 @@ namespace dyplo
 		return 0;
 	}
 
-	ssize_t HardwareProgrammer::processData(const void* data, const size_t length_bytes)
+	size_t HardwareProgrammer::beginProcessData(void **data, size_t bytes_remaining)
 	{
 		if (dma_writer != NULL)
 		{
-			HardwareDMAFifo::Block *block = dma_writer->dequeue();
-			memcpy(block->data, data, length_bytes);
+			if (!block)
+				block = dma_writer->dequeue();
+			*data = block->data;
+			return bytes_remaining > block->size ? block->size : bytes_remaining;
+		}
+		else if (cpu_fifo != NULL)
+		{
+			if (!cpu_buffer)
+				cpu_buffer = malloc(BUFFER_SIZE);
+			*data = cpu_buffer;
+			return bytes_remaining > BUFFER_SIZE ? BUFFER_SIZE : bytes_remaining;
+		}
+		return 0; /* Should never happen */
+	}
 
+	ssize_t HardwareProgrammer::endProcessData(size_t length_bytes)
+	{
+		if (dma_writer != NULL)
+		{
 			/* Workaround for DMA node only supporting 64-bit writes */
 			size_t length_dma_block = length_bytes;
 			if (length_dma_block % 8)
@@ -1091,15 +1119,15 @@ namespace dyplo
 			}
 			block->bytes_used = length_dma_block;
 			dma_writer->enqueue(block);
+			block = NULL;
 
 			return length_bytes;
 		}
 		else if (cpu_fifo != NULL)
 		{
-			return cpu_fifo->write(data, length_bytes);
+			return cpu_fifo->write(cpu_buffer, length_bytes);
 		}
-
-		return 0;
+		return 0; /* Should not get here */
 	}
 
 	void HardwareProgrammer::verifyStaticID(const unsigned short user_id)

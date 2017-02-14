@@ -221,33 +221,31 @@ namespace dyplo
 	class FpgaImageReaderCallback
 	{
 	public:
-		// returns amount of bytes processed
-		virtual ssize_t processData(const void* data, const size_t length_bytes) = 0;
+		// First call beginProcessData to get a data pointer. Return
+		// is the amount of available buffer space.
+		virtual size_t beginProcessData(void **data, size_t bytes_remaining) = 0;
+		// Call endprocessdata after filling the buffer.
+		virtual ssize_t endProcessData(size_t length_bytes) = 0;
 		virtual void verifyStaticID(const unsigned short user_id) = 0;
 	};
 
 	class FpgaImageFileWriter: public FpgaImageReaderCallback
 	{
 	public:
-		FpgaImageFileWriter(File& output):
-			output_file(output)
-		{
-		}
-
-		~FpgaImageFileWriter()
-		{
-			output_file.flush();
-		}
+		FpgaImageFileWriter(File& output);
+		~FpgaImageFileWriter();
 
 		// FpgaImageReaderCallback interface
-		virtual ssize_t processData(const void* data, const size_t length_bytes);
+		virtual size_t beginProcessData(void **data, size_t bytes_remaining);
+		virtual ssize_t endProcessData(size_t length_bytes);
 		virtual void verifyStaticID(const unsigned short user_id);
 	private:
 		File& output_file;
+		void *buffer;
 	};
 
 	static const size_t ALIGN_SIZE = 4 * 1024;
-	static const size_t BUFFER_SIZE = 8 * ALIGN_SIZE;
+	static const size_t BUFFER_SIZE = 4 * ALIGN_SIZE;
 	static const size_t ESTIMATED_FIFO_SIZE = 256;
 
 	// can read .bit and .bin and .partial files and will output the data to be flashed on the FPGA
@@ -282,14 +280,17 @@ namespace dyplo
 		unsigned int fromFile(File& file);
 
 		// FpgaImageReaderCallback interface
-		virtual ssize_t processData(const void* data, const size_t length_bytes);
+		virtual size_t beginProcessData(void **data, size_t bytes_remaining);
+		virtual ssize_t endProcessData(size_t length_bytes);
 		virtual void verifyStaticID(const unsigned short user_id);
 	protected:
 		// for DMA data stream to ICAP
-		HardwareDMAFifo* dma_writer;
+		HardwareDMAFifo *dma_writer;
+		HardwareDMAFifo::Block *block;
 
 		// for CPU data stream to ICAP
-		HardwareFifo* cpu_fifo;
+		HardwareFifo *cpu_fifo;
+		void *cpu_buffer;
 	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);

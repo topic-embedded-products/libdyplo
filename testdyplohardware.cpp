@@ -82,15 +82,22 @@ struct hardware_programmer {};
 class FpgaImageReaderCallbackMock : public dyplo::FpgaImageReaderCallback
 {
 public:
-	virtual ssize_t processData(const void* data, const size_t length_bytes)
+	FpgaImageReaderCallbackMock(): buffer(malloc(dyplo::BUFFER_SIZE)) {}
+	~FpgaImageReaderCallbackMock() { free(buffer); }
+	virtual size_t beginProcessData(void **data, size_t bytes_remaining)
 	{
-		// do nothing
+		*data = buffer;
+		return bytes_remaining > dyplo::BUFFER_SIZE ? dyplo::BUFFER_SIZE : bytes_remaining;
 	}
-
+	virtual ssize_t endProcessData(size_t length_bytes)
+	{
+		return length_bytes;
+	}
 	virtual void verifyStaticID(const unsigned short user_id)
 	{
-		// do nothing
 	}
+protected:
+	void *buffer;
 };
 
 
