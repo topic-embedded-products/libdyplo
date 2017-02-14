@@ -777,7 +777,7 @@ namespace dyplo
 		}
 		return result;
 	}
-   
+
 	void FpgaImageReader::processTag(char tag, unsigned short size, const void* data)
 	{
 		if (tag == 'a')
@@ -798,13 +798,13 @@ namespace dyplo
 
 		std::vector<unsigned char> buffer(BUFFER_SIZE);
 		unsigned char* buffer_start = &buffer[0];
-		
+
 		ssize_t bytes = fpgaImageFile.read_all(buffer_start, ALIGN_SIZE);
 		if (bytes < 64)
 		{
 			throw TruncatedFileException();
 		}
-        
+
 		if ((parse_u16(buffer_start) == 9) && /* Magic marker for .bit file */
 			(parse_u16(buffer_start + 11) == 1) &&
 			(buffer[13] == 'a'))
@@ -812,7 +812,7 @@ namespace dyplo
 			/* It's a bitstream, convert and flash */
 			const unsigned char* end = buffer_start + bytes;
 			unsigned char* data = buffer_start + 13;
-            
+
 			/* Browse through tag/value pairs looking for the "e" */
 			for(;;)
 			{
@@ -821,13 +821,13 @@ namespace dyplo
 				{
 					break;
 				}
-				
+
 				++data;
 				if (data >= end)
 				{
 					throw TruncatedFileException();
 				}
-                
+
 				unsigned short length = parse_u16(data);
 				unsigned char* value = data + 2;
 				data = value + length;
@@ -838,18 +838,18 @@ namespace dyplo
 
 				processTag(tag, length, value);
 			}
-            
+
 			++data;
 			if (data+4 >= end)
 			{
 				throw TruncatedFileException();
 			}
-            
+
 			unsigned int size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 			total_data_bytes_processed = size;
 			data += 4;
 			unsigned int total_bytes = bytes - (data - buffer_start);
-			
+
 			/* Move the remaining data to the buffer start to align
 			 * it on word boundary. */
 			memmove(buffer_start, data, total_bytes);
@@ -873,14 +873,14 @@ namespace dyplo
 					total_bytes += align;
 				}
 			}
-            
+
 			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
 			bytes = callback.processData(buffer_start, total_bytes);
 			if (bytes < total_bytes)
 			{
 				throw TruncatedFileException();
 			}
-            
+
 			while (total_bytes < size)
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
@@ -889,14 +889,14 @@ namespace dyplo
 				{
 					throw TruncatedFileException();
 				}
-                
+
 				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
 				bytes = callback.processData(buffer_start, to_read);
 				if (bytes < to_read)
 				{
 					throw TruncatedFileException();
 				}
-                    
+
 				total_bytes += bytes;
 			}
 		}
@@ -930,7 +930,7 @@ namespace dyplo
 				{
 					throw TruncatedFileException();
 				}
-                
+
 				total_data_bytes_processed += bytes;
 				bytes = fpgaImageFile.read_all(buffer_start, BUFFER_SIZE);
 			}
@@ -980,7 +980,7 @@ namespace dyplo
 				dma_writer->reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
 					programmer_blocksize, programmer_numblocks, false);
 				dma_writer->addRouteTo(icap);
-			} 
+			}
 			else if (cpu_fifo != NULL)
 			{
 				cpu_fifo->addRouteTo(icap);
@@ -991,7 +991,7 @@ namespace dyplo
 			throw IOException("No ICAP");
 		}
 	}
-    
+
 	unsigned short HardwareProgrammer::getDyploStaticID()
 	{
 		if (!dyplo_user_id_valid)
@@ -999,10 +999,10 @@ namespace dyplo
 			dyplo_user_id = control.readDyploStaticID();
 			dyplo_user_id_valid = true;
 		}
-        
+
 		return dyplo_user_id;
 	}
-    
+
 	HardwareProgrammer::~HardwareProgrammer()
 	{
 		sendNOP(ESTIMATED_FIFO_SIZE);
@@ -1080,7 +1080,7 @@ namespace dyplo
 		{
 			HardwareDMAFifo::Block *block = dma_writer->dequeue();
 			memcpy(block->data, data, length_bytes);
-            
+
 			/* Workaround for DMA node only supporting 64-bit writes */
 			size_t length_dma_block = length_bytes;
 			if (length_dma_block % 8)
@@ -1102,7 +1102,7 @@ namespace dyplo
 		return 0;
 	}
 
-    void HardwareProgrammer::verifyStaticID(const unsigned short user_id)
+	void HardwareProgrammer::verifyStaticID(const unsigned short user_id)
 	{
 		if (getDyploStaticID() != user_id)
 		{

@@ -226,10 +226,10 @@ namespace dyplo
 		virtual void verifyStaticID(const unsigned short user_id) = 0;
 	};
 
-	class FpgaImageFileWriter : public FpgaImageReaderCallback
+	class FpgaImageFileWriter: public FpgaImageReaderCallback
 	{
 	public:
-		FpgaImageFileWriter(File& output) :
+		FpgaImageFileWriter(File& output):
 			output_file(output)
 		{
 		}
@@ -239,9 +239,9 @@ namespace dyplo
 			output_file.flush();
 		}
 
-        // FpgaImageReaderCallback interface
+		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
-        virtual void verifyStaticID(const unsigned short user_id);
+		virtual void verifyStaticID(const unsigned short user_id);
 	private:
 		File& output_file;
 	};
@@ -261,17 +261,17 @@ namespace dyplo
 
 		// returns amount of bytes of FPGA data read
 		size_t processFile(File& fpgaImageFile);
-        
+
 	protected:
 		virtual bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 		virtual void processTag(char tag, unsigned short size, const void *data);
 
 	private:
 		FpgaImageReaderCallback& callback;
-    };
+	};
 
 	// can program via ICAP
-	class HardwareProgrammer : public FpgaImageReaderCallback
+	class HardwareProgrammer: public FpgaImageReaderCallback
 	{
 	public:
 		HardwareProgrammer(HardwareContext& context, HardwareControl& control);
@@ -283,13 +283,13 @@ namespace dyplo
 
 		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
-        virtual void verifyStaticID(const unsigned short user_id);
+		virtual void verifyStaticID(const unsigned short user_id);
 	protected:
 		// for DMA data stream to ICAP
 		HardwareDMAFifo* dma_writer;
 
 		// for CPU data stream to ICAP
-		HardwareFifo*    cpu_fifo;
+		HardwareFifo* cpu_fifo;
 	private:
 		/* Flush out queues by sending a string of NOPs */
 		unsigned int sendNOP(unsigned int count);
@@ -301,5 +301,4 @@ namespace dyplo
 		unsigned short dyplo_user_id;
 		bool dyplo_user_id_valid;
 	};
-
 }
