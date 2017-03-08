@@ -27,7 +27,7 @@ OBJS=$(C_O_FILES) $(CC_O_FILES) $(S_O_FILES) $(H_FILES)
 include $(RTEMS_MAKEFILE_PATH)/Makefile.inc
 
 include $(RTEMS_CUSTOM)
-include $(RTEMS_ROOT)/make/lib.cfg
+include lib.cfg
 
 #
 # Add local stuff here using +=
