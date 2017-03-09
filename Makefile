@@ -54,6 +54,7 @@ $(LIB): ${OBJS}
 
 # Install the library, appending _g or _p as appropriate.
 # for include files, just use $(INSTALL_CHANGE)
-install:  all
-	$(INSTALL_VARIANT) -m 644 ${LIB} ${PROJECT_RELEASE}/lib
-# DO NOT DELETE
+
+# Don't install libraries for now
+#install:  all
+#	$(INSTALL_VARIANT) -m 644 ${LIB} ${PROJECT_RELEASE}/lib
