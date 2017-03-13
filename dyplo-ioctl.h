@@ -27,6 +27,10 @@
  * Postbus 440, 5680 AK Best, The Netherlands.
  */
 
+#ifdef __rtems__
+	typedef __uint32_t __u32;
+	typedef __uint16_t __u16;
+#endif
 
 /* ioctl values for dyploctl device, set and get routing tables */
 struct dyplo_route_item_t {

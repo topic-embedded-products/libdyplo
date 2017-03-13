@@ -26,7 +26,9 @@
  * You can contact Topic by electronic mail via info@topic.nl or via
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
+#ifdef __linux__
 #include "config.h"
+#endif
 #include "hardware.hpp"
 #include "directoryio.hpp"
 #include <sys/ioctl.h>
@@ -47,7 +49,9 @@
 
 extern "C"
 {
+#ifdef __linux__
 #include <linux/types.h>
+#endif
 #include "dyplo-ioctl.h"
 } /* extern "C" */
 
@@ -231,6 +235,7 @@ namespace dyplo
 
 	unsigned int HardwareContext::getAvailablePartitionsIn(const char* path)
 	{
+#if defined(__linux__)
 		int result = 0;
 		DirectoryListing dir(path);
 		struct dirent *entry;
@@ -248,6 +253,10 @@ namespace dyplo
 			}
 		}
 		return result;
+#elif defined(__rtems__)
+		// TODO
+		return 0;
+#endif
 	}
 
 	unsigned int HardwareContext::getAvailablePartitions(const char* function)
@@ -260,6 +269,7 @@ namespace dyplo
 
 	std::string HardwareContext::findPartitionIn(const char* path, int partition)
 	{
+#if defined(__linux__)
 		DirectoryListing dir(path);
 		struct dirent *entry;
 		std::list<std::string> possible_partitions;
@@ -302,8 +312,10 @@ namespace dyplo
 			// no '.partial' partitions found, return first possibility
 			return possible_partitions.front();
 		}
-
+#elif defined(__rtems__)
+		// TODO
 		return "";
+#endif
 	}
 
 	std::string HardwareContext::findPartition(const char* function, int partition)

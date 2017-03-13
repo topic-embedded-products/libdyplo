@@ -27,8 +27,13 @@
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
 #include <fcntl.h>
-#include <poll.h>
+#include <sys/poll.h>
 #include "filequeue.hpp"
+
+#ifdef __rtems__
+// TODO
+#define POLLRDHUP 0
+#endif
 
 namespace dyplo
 {
@@ -64,7 +69,7 @@ namespace dyplo
 	{
 	}
 
-	const char* IOException::what() const throw()
+	const char* IOException::what() const _GLIBCXX_USE_NOEXCEPT
 	{
 		if (context.empty())
 			return strerror(m_errno);

@@ -10,7 +10,7 @@ C_PIECES=
 C_FILES=$(C_PIECES:%=%.c)
 C_O_FILES=$(C_PIECES:%=${ARCH}/%.o)
 
-CC_PIECES=pthreadscheduler
+CC_PIECES=pthreadscheduler hardware filequeue
 CC_FILES=$(CC_PIECES:%=%.cpp)
 CC_O_FILES=$(CC_PIECES:%=${ARCH}/%.o)
 
@@ -34,7 +34,7 @@ include lib.cfg
 #
 
 DEFINES  +=
-CPPFLAGS +=
+CPPFLAGS += -DBITSTREAM_DATA_PATH=\"/usr/share/bitstreams\"
 CFLAGS   +=
 
 #
