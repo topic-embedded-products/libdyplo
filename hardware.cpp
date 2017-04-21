@@ -119,7 +119,7 @@ namespace dyplo
 		for (;;)
 		{
 			int char_amount_requested = snprintf(filename, sizeof(filename), pattern, result);
-			assert(char_amount_requested < sizeof(filename));
+			assert(char_amount_requested < static_cast<int>(sizeof(filename)));
 			if (::access(filename, F_OK) != 0)
 				return result;
 			++result;
@@ -201,10 +201,12 @@ namespace dyplo
 		}
 	}
 
+/* -- start fix compiler warning, unused function --
 	static bool is_digit(const char c)
 	{
 		return (c >= '0') && (c <= '9');
 	}
+
 
 	static int parse_number_from_name(const char* name)
 	{
@@ -232,6 +234,7 @@ namespace dyplo
 		}
 		return -1;
 	}
+-- end fix compiler warning, unused function */
 
 	unsigned int HardwareContext::getAvailablePartitionsIn(const char* path)
 	{
@@ -878,7 +881,11 @@ namespace dyplo
 				{
 					align = ALIGN_SIZE - align; /* number of bytes to read */
 					bytes = fpgaImageFile.read_all(buffer_start + total_bytes, align);
-					if (bytes < align)
+					if (bytes < 0)
+					{
+						throw IOException();
+					}
+					else if (static_cast<unsigned int>(bytes) < align)
 					{
 						throw TruncatedFileException();
 					}
@@ -888,7 +895,11 @@ namespace dyplo
             
 			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
 			bytes = callback.processData(buffer_start, total_bytes);
-			if (bytes < total_bytes)
+			if (bytes < 0)
+			{
+				throw IOException();
+			}
+			else if (static_cast<unsigned int>(bytes) < total_bytes)
 			{
 				throw TruncatedFileException();
 			}
@@ -897,14 +908,22 @@ namespace dyplo
 			{
 				unsigned int to_read = size - total_bytes < BUFFER_SIZE ? size - total_bytes : BUFFER_SIZE;
 				bytes = fpgaImageFile.read_all(buffer_start, to_read);
-				if (bytes < to_read)
+				if (bytes < 0)
+				{
+					throw IOException();
+				}
+				else if (static_cast<unsigned int>(bytes) < to_read)
 				{
 					throw TruncatedFileException();
 				}
                 
 				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
 				bytes = callback.processData(buffer_start, to_read);
-				if (bytes < to_read)
+				if (bytes < 0)
+				{
+					throw IOException();
+				}
+				else if (static_cast<unsigned int>(bytes) < to_read)
 				{
 					throw TruncatedFileException();
 				}

@@ -34,7 +34,7 @@ include lib.cfg
 #
 
 DEFINES  +=
-CPPFLAGS += -DBITSTREAM_DATA_PATH=\"/usr/share/bitstreams\"
+CPPFLAGS += -DBITSTREAM_DATA_PATH=\"/usr/share/bitstreams\" -Wall -Werror
 CFLAGS   +=
 
 #
