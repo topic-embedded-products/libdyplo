@@ -96,6 +96,10 @@ namespace dyplo
 
 	void FilePollScheduler::wait_readable(int filehandle)
 	{
+		// TODO implement
+		throw std::runtime_error("Not yet implemented");
+
+		/*
 		if (m_interrupted)
 			throw InterruptedException();
 		struct pollfd fds[2];
@@ -108,10 +112,15 @@ namespace dyplo
 			throw std::runtime_error("poll() failed");
 		if (fds[1].revents)
 			throw InterruptedException();
+		*/
 	}
 
 	void FilePollScheduler::wait_writeable(int filehandle)
 	{
+		// TODO implement
+		throw std::runtime_error("Not yet implemented");
+
+		/*
 		if (m_interrupted)
 			throw InterruptedException();
 		struct pollfd fds[2];
@@ -124,6 +133,7 @@ namespace dyplo
 			throw std::runtime_error("poll() failed");
 		if (fds[1].revents)
 			throw InterruptedException();
+		*/
 	}
 
 	void FilePollScheduler::interrupt()
