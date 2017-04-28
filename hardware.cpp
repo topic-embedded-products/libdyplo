@@ -31,6 +31,7 @@
 #endif
 #include "hardware.hpp"
 #include "directoryio.hpp"
+#include "dyplo-ioctl.h"
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <errno.h>
@@ -46,14 +47,6 @@
 #include <iostream>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
-
-extern "C"
-{
-#ifdef __linux__
-#include <linux/types.h>
-#endif
-#include "dyplo-ioctl.h"
-} /* extern "C" */
 
 namespace dyplo
 {
