@@ -353,9 +353,9 @@ namespace dyplo
 			throw IOException(__func__);
 	}
 
-	void HardwareControl::routeDelete(char node)
+	void HardwareControl::routeDelete(char dstNode)
 	{
-		int arg = node;
+		int arg = dstNode;
 		if (::ioctl(handle, DYPLO_IOCTROUTE_DELETE, arg) != 0)
 			throw IOException(__func__);
 	}
@@ -537,16 +537,16 @@ namespace dyplo
 		return result;
 	}
 
-	void HardwareFifo::addRouteTo(int destination)
+	void HardwareFifo::addRouteTo(int dstNodeAndFifoIndex)
 	{
-		int result = ::ioctl(handle, DYPLO_IOCTROUTE_TELL_TO_LOGIC, destination);
+		int result = ::ioctl(handle, DYPLO_IOCTROUTE_TELL_TO_LOGIC, dstNodeAndFifoIndex);
 		if (result < 0)
 			throw IOException(__func__);
 	}
 
-	void HardwareFifo::addRouteFrom(int source)
+	void HardwareFifo::addRouteFrom(int srcNodeAndFifoIndex)
 	{
-		int result = ::ioctl(handle, DYPLO_IOCTROUTE_TELL_FROM_LOGIC, source);
+		int result = ::ioctl(handle, DYPLO_IOCTROUTE_TELL_FROM_LOGIC, srcNodeAndFifoIndex);
 		if (result < 0)
 			throw IOException(__func__);
 	}

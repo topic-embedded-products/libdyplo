@@ -82,7 +82,8 @@ namespace dyplo
 		void routeAddSingle(unsigned char srcNode, unsigned char srcFifo, unsigned char dstNode, unsigned char dstFifo);
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
-		void routeDelete(char node);
+		// deletes all routes to the given destination node
+		void routeDelete(char dstNode);
 
 		// Will attempt to program via ICAP interface:
 		unsigned int program(File &input);
@@ -132,8 +133,10 @@ namespace dyplo
 		void reset(); /* Reset fifo */
 		int getNodeAndFifoIndex(); /* Returns node | fifo << 8 */
 		static int getNodeAndFifoIndex(int file_descriptor);
-		void addRouteTo(int destination);
-		void addRouteFrom(int source);
+		// format of parameter dstNodeAndFifoIndex: (nodeIndex | fifoIndex << 8)
+		void addRouteTo(int dstNodeAndFifoIndex);
+		// format of parameter srcNodeAndFifoIndex: (nodeIndex | fifoIndex << 8)
+		void addRouteFrom(int srcNodeAndFifoIndex);
 		unsigned int getDataTreshold();
 		void setDataTreshold(unsigned int value);
 		void setUserSignal(int usersignal);
