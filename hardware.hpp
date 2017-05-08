@@ -139,6 +139,7 @@ namespace dyplo
 		void addRouteFrom(int srcNodeAndFifoIndex);
 		unsigned int getDataTreshold();
 		void setDataTreshold(unsigned int value);
+		// only user signal values of 0-15 are accepted
 		void setUserSignal(int usersignal);
 		int getUserSignal();
 	};
