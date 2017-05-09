@@ -51,11 +51,16 @@ namespace dyplo
 		int openAvailableWriteFifo();
 		int openAvailableReadFifo();
 
-		/* Find bitfiles in directories */
+		// Find bitfiles in directories.
+		// returns 32-bit bitmask where every bit represents a node ID for which the partial is available.
+		// LSB bit0 == node0, bit1 == node1 etc..
 		unsigned int getAvailablePartitions(const char* function);
-		std::string findPartition(const char* function, int partition);
 		static unsigned int getAvailablePartitionsIn(const char* path);
-		static std::string findPartitionIn(const char* path, int partition);
+
+		// returns path of bitstream if found. Empty string otherwise.
+		std::string findPartition(const char* function, int node_id);
+		static std::string findPartitionIn(const char* path, int node_id);
+
 		void setBitstreamBasepath(const std::string& value) { bitstream_basepath = value; }
 		void setBitstreamBasepath(const char* value) { bitstream_basepath = value; }
 	protected:

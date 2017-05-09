@@ -194,7 +194,6 @@ namespace dyplo
 		}
 	}
 
-/* -- start fix compiler warning, unused function --
 	static bool is_digit(const char c)
 	{
 		return (c >= '0') && (c <= '9');
@@ -227,32 +226,42 @@ namespace dyplo
 		}
 		return -1;
 	}
--- end fix compiler warning, unused function */
 
 	unsigned int HardwareContext::getAvailablePartitionsIn(const char* path)
 	{
-#if defined(__linux__)
 		int result = 0;
 		DirectoryListing dir(path);
 		struct dirent *entry;
 		while ((entry = dir.next()) != NULL)
 		{
+			bool isLinkOrRegularFile = false;
+#if defined (__linux__)
 			switch (entry->d_type)
 			{
 				case DT_REG:
 				case DT_LNK:
 				case DT_UNKNOWN:
-					int index = parse_number_from_name(entry->d_name);
-					if (index >= 0)
-						result |= (1 << index);
+					isLinkOrRegularFile = true;
 					break;
+			}
+#elif defined(__rtems__)
+			struct stat statBuf;
+			std::string fullFileName = std::string(path) + "/" + std::string(entry->d_name);
+			int res = stat(fullFileName.c_str(), &statBuf);
+
+			if ((res == 0) && (S_ISREG(statBuf.st_mode) || S_ISLNK(statBuf.st_mode)))
+			{
+				isLinkOrRegularFile = true;
+			}
+#endif
+			if (isLinkOrRegularFile)
+			{
+				int index = parse_number_from_name(entry->d_name);
+				if (index >= 0)
+					result |= (1 << index);
 			}
 		}
 		return result;
-#elif defined(__rtems__)
-		// TODO
-		return 0;
-#endif
 	}
 
 	unsigned int HardwareContext::getAvailablePartitions(const char* function)
@@ -263,24 +272,41 @@ namespace dyplo
 		return getAvailablePartitionsIn(path.c_str());
 	}
 
-	std::string HardwareContext::findPartitionIn(const char* path, int partition)
+	std::string HardwareContext::findPartitionIn(const char* path, int node_id)
 	{
-#if defined(__linux__)
 		DirectoryListing dir(path);
 		struct dirent *entry;
 		std::list<std::string> possible_partitions;
 		while ((entry = dir.next()) != NULL)
 		{
+			bool isLinkOrRegularFile = false;
+#if defined (__linux__)
 			switch (entry->d_type)
 			{
 				case DT_REG:
 				case DT_LNK:
 				case DT_UNKNOWN:
-					int index = parse_number_from_name(entry->d_name);
-					if (index == partition)
-					{
-						possible_partitions.push_back(std::string(path) + '/' + entry->d_name);
-					}
+					isLinkOrRegularFile = true;
+					break;
+			}
+#elif defined(__rtems__)
+			struct stat statBuf;
+			std::string fullFileName = std::string(path) + "/" + std::string(entry->d_name);
+			int res = stat(fullFileName.c_str(), &statBuf);
+
+			if ((res == 0) && (S_ISREG(statBuf.st_mode) || S_ISLNK(statBuf.st_mode)))
+			{
+				isLinkOrRegularFile = true;
+			}
+#endif
+
+			if (isLinkOrRegularFile)
+			{
+				int index = parse_number_from_name(entry->d_name);
+				if (index == node_id)
+				{
+					possible_partitions.push_back(std::string(path) + '/' + entry->d_name);
+				}
 			}
 		}
 
@@ -308,18 +334,16 @@ namespace dyplo
 			// no '.partial' partitions found, return first possibility
 			return possible_partitions.front();
 		}
-#elif defined(__rtems__)
-		// TODO
+
 		return "";
-#endif
 	}
 
-	std::string HardwareContext::findPartition(const char* function, int partition)
+	std::string HardwareContext::findPartition(const char* function, int node_id)
 	{
 		std::string path(bitstream_basepath);
 		path += '/';
 		path += function;
-		return findPartitionIn(path.c_str(), partition);
+		return findPartitionIn(path.c_str(), node_id);
 	}
 
 	void HardwareControl::routeDeleteAll()
