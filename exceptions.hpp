@@ -70,6 +70,18 @@ namespace dyplo
 		virtual const char* what() const throw();
 	};
 
+	class ArgumentOutOfRangeHasBeenTruncatedException: public std::exception
+	{
+	public:
+		ArgumentOutOfRangeHasBeenTruncatedException(int truncate_value);
+		~ArgumentOutOfRangeHasBeenTruncatedException() throw () {} /* Fails compiling without this */
+		virtual const char* what() const _GLIBCXX_USE_NOEXCEPT;
+	private:
+		int value;
+	protected:
+		mutable std::string buffer; /* mutable because of "const" what */
+	};
+
 	class IOException: public std::exception
 	{
 	public:

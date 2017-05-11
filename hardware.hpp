@@ -51,13 +51,13 @@ namespace dyplo
 		int openAvailableWriteFifo();
 		int openAvailableReadFifo();
 
-		// Find bitfiles in directories.
-		// returns 32-bit bitmask where every bit represents a node ID for which the partial is available.
+		// Find and returns nodeIds for which partial bitstreams are available for the given function.
+		// returns the nodeIds as a 32-bit bitmask where every bit represents a node ID for which the partial bitstream is available.
 		// LSB bit0 == node0, bit1 == node1 etc..
 		unsigned int getAvailablePartitions(const char* function);
 		static unsigned int getAvailablePartitionsIn(const char* path);
 
-		// returns path of bitstream if found. Empty string otherwise.
+		// returns path of partial bitstream if found. Empty string otherwise.
 		std::string findPartition(const char* function, int node_id);
 		static std::string findPartitionIn(const char* path, int node_id);
 
@@ -144,7 +144,7 @@ namespace dyplo
 		void addRouteFrom(int srcNodeAndFifoIndex);
 		unsigned int getDataTreshold();
 		void setDataTreshold(unsigned int value);
-		// only user signal values of 0-15 are accepted
+		// only the 4 least significant bits are used for the user signal, giving you a value range of (0 - 15).
 		void setUserSignal(int usersignal);
 		int getUserSignal();
 	};
@@ -289,6 +289,8 @@ namespace dyplo
 		// returns amount of bytes read
 		unsigned int fromFile(const char *filename);
 		unsigned int fromFile(File& file);
+		unsigned int programNodeFromFile(unsigned int node_id, const char *filename);
+		unsigned int programNodeFromFile(unsigned int node_id, File& file);
 
 		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
@@ -304,6 +306,7 @@ namespace dyplo
 		unsigned int sendNOP(unsigned int count);
 		unsigned int getDyploStaticID();
 
+		HardwareContext& context;
 		HardwareControl& control;
 		FpgaImageReader reader;
 

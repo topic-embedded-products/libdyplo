@@ -588,6 +588,8 @@ namespace dyplo
 		int result = ::ioctl(handle, DYPLO_IOCTTRESHOLD, value);
 		if (result < 0)
 			throw IOException(__func__);
+		else if (((unsigned int)result) != value)
+			throw ArgumentOutOfRangeHasBeenTruncatedException(result);
 	}
 
 	void HardwareFifo::setUserSignal(int usersignal)
@@ -995,6 +997,7 @@ namespace dyplo
 	HardwareProgrammer::HardwareProgrammer(HardwareContext& context, HardwareControl& control) :
 		dma_writer(NULL),
 		cpu_fifo(NULL),
+		context(context),
 		control(control),
 		reader(*this),
 		dyplo_user_id_valid(false)
@@ -1080,6 +1083,30 @@ namespace dyplo
 	unsigned int HardwareProgrammer::fromFile(File& file)
 	{
 		return reader.processFile(file);
+	}
+
+	unsigned int HardwareProgrammer::programNodeFromFile(unsigned int node_id, const char* filename)
+	{
+		HardwareConfig cfg(context.openConfig(node_id, O_RDONLY));
+		// disconnect from backplane
+		cfg.disableNode();
+		unsigned int res = fromFile(filename);
+		// reconnect to backplane
+		cfg.enableNode();
+
+		return res;
+	}
+
+	unsigned int HardwareProgrammer::programNodeFromFile(unsigned int node_id, File& file)
+	{
+		HardwareConfig cfg(context.openConfig(node_id, O_RDONLY));
+		// disconnect from backplane
+		cfg.disableNode();
+		unsigned int res = fromFile(file);
+		// reconnect to backplane
+		cfg.enableNode();
+
+		return res;
 	}
 
 	unsigned int HardwareProgrammer::sendNOP(unsigned int count)

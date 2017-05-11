@@ -28,6 +28,7 @@
  */
 #include <fcntl.h>
 #include <sys/poll.h>
+#include <sstream>
 #include "filequeue.hpp"
 
 #ifdef __rtems__
@@ -79,6 +80,19 @@ namespace dyplo
 			buffer += " context: ";
 			buffer += context;
 		}
+		return buffer.c_str();
+	}
+
+	ArgumentOutOfRangeHasBeenTruncatedException::ArgumentOutOfRangeHasBeenTruncatedException(int truncate_value) :
+		value(truncate_value)
+	{
+	}
+
+	const char* ArgumentOutOfRangeHasBeenTruncatedException::what() const _GLIBCXX_USE_NOEXCEPT
+	{
+		std::stringstream ss;
+		ss << "Truncated to " << value;
+		buffer = ss.str();
 		return buffer.c_str();
 	}
 
