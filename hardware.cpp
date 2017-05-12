@@ -94,6 +94,9 @@ namespace dyplo
 
 	int HardwareContext::openAvailableDMA(int access)
 	{
+		// TODO:
+		throw IOException(ENODEV);
+
 		for (int index = 0; index < 31; ++index)
 		{
 			int result = openDMA(index, access);
