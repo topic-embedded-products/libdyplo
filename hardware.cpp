@@ -94,9 +94,6 @@ namespace dyplo
 
 	int HardwareContext::openAvailableDMA(int access)
 	{
-		// TODO:
-		throw IOException(ENODEV);
-
 		for (int index = 0; index < 31; ++index)
 		{
 			int result = openDMA(index, access);
@@ -670,8 +667,10 @@ namespace dyplo
 
 	void HardwareDMAFifo::dispose()
 	{
+#if defined(__linux__)
 		unmap();
 		::ioctl(handle, DYPLO_IOCDMABLOCK_FREE);
+#endif
 	}
 
 	HardwareDMAFifo::Block* HardwareDMAFifo::dequeue()
