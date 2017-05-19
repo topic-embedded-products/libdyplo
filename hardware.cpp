@@ -94,6 +94,8 @@ namespace dyplo
 
 	int HardwareContext::openAvailableDMA(int access)
 	{
+		throw IOException("Not yet implemented");
+
 		for (int index = 0; index < 31; ++index)
 		{
 			int result = openDMA(index, access);
