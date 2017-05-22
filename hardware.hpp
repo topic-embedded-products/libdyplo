@@ -149,26 +149,63 @@ namespace dyplo
 		int getUserSignal();
 	};
 
+
+	// class HardwareDMAFifo
+	// DMA lets the logic directly transfer data to and from memory, which .
+	// is shared with the CPU.
+	// when large blocks of data need to be transferred, usage of DMA is
+	// typically faster and uses less CPU overhead. Please note that
+	// the CPU overhead is fixed and independent from the block data size.
 	class HardwareDMAFifo: public HardwareFifo
 	{
 	public:
 		/* This struct matches what the driver uses in its ioctl */
 		struct InternalBlock
 		{
-			uint32_t id;	/* 0-based index of the buffer */
-			uint32_t offset;	/* Location of data in memory map */
-			uint32_t size;	/* Size of buffer */
-			uint32_t bytes_used; /* How much actually is in use */
-			uint16_t user_signal; /* User signals (framing) either way */
-			uint16_t state; /* Who's owner of the buffer */
+			uint32_t id;          // 0-based index of the buffer
+			uint32_t offset;      // Location of data in memory map
+			uint32_t size;	      // Size of buffer
+			uint32_t bytes_used;  // How much actually is in use
+			uint16_t user_signal; // User signals (framing) either way
+			uint16_t state;       // Who's owner of the buffer
 		};
 		struct Block: public InternalBlock
 		{
-			void* data; /* Points to memory-mapped DMA buffer */
+			void* data; // Points to memory-mapped DMA buffer
 		};
 		HardwareDMAFifo(int file_descriptor);
 		~HardwareDMAFifo();
 
+		//Modes:
+		//MODE_STANDALONE: This mode is used to give a Dyplo Process its own memory to read or write data to.
+		//                 Typically the software application is only responsible for setting up a route to/from
+		//                 a node to a DMA node and configuring this DMA node to stream the data to/from memory
+		//                 refer to the "StandaloneConfiguration" struct for more information.
+		//
+		//MODE_RINGBUFFER: This is the easiest way to use DMA. After creating and configuring the object,
+		//                 the application can simply use the 'File' base class' read and write methods to
+		//                 'stream' data.
+		//                 data will be copied to/from a ringbuffer in memory; the DMA transfers to/from Dyplo
+		//                 are taken care for by a ringbuffer.
+		//
+		//MODE_COHERENT:   see MODE_STREAMING
+		//MODE_STREAMING:  Using one of these modes is more complex for an application, but it enables processing
+		//                 of data without making a copy first.
+		//                 This is done by the use of multiple buffers. A user application must first
+		//                 reconfigure the HardwareDMAFifo to allocate a number of buffers of a certain size.
+		//                 further information is given at the methods "dequeue" and "enqueue".
+		//
+		//                 Both modes are functionally used in the same way by the application.
+		//                 The difference is in the performance that can be reached and depends also on the
+		//                 hardware architecture of the target. E.g. whether the CPU cache controller can
+		//                 'see' the DMA transfers on the memory bus.
+		//                 Summarized the difference is as follows:
+		//                   MODE_COHERENT: calls to enqueue and dequeue are relatively cheap, access to the
+		//                                 allocated memory buffer may be slow (typically because it is not cached)
+		//                   MODE_STREAMING: calls to enqueue and dequeue are relatively expensive and access
+		//                                to the allocated memory is fast (typically because it is cached).
+		//                                The enqueue and dequeue are slower because they have to arrange
+		//                                cache and memory consistency.
 		enum {
 			MODE_STANDALONE = 0,
 			MODE_RINGBUFFER = 1,
@@ -184,10 +221,56 @@ namespace dyplo
 		 * destructor */
 		void dispose();
 
-		/* Get a block from the queue. In non-blocking mode, returns
-		 * NULL when it would block. When writing, this is the first
-		 * thing to do. Only valid for MODE_COHERENT and MODE_STREAMING
-		 * configurations. */
+		/* About dequeue and enqueue
+		* 1. dequeue returns the next available buffer and gives ovwnership of
+		*    that buffer to the users application
+		*    - The number of buffers N was set with the method 'reconfigure'. An
+		*      application can call dequeue N times without returning a buffer
+		*      by calling enqueue.
+		*    - Calling dequeue will throw an error if called more than N times
+		*      without calling enqueue first.
+		* 2. enqueue is used to return ownership of the buffer to the Dyplo driver
+		*     -the driver will start a DMA transfer to or from the buffer
+		*
+		* typical usage
+		* A. WRITING DATA from memory to Dyplo using 2 buffers
+		*
+		*    CODE EXAMPLE:
+		*    HardwareDMAFifo dmaWriteBufs(File('/dev/dyplod0', O_RW);
+		*    dmaWriteBufs.reconfigure (MODE_COHERENT, 100, 2, false);
+		*    Block *one = dmaWriteBufs.dequeue();
+		*    Block *two = dmaWriteBufs.dequeue();
+		*    one->bytes_used = 100;              //fill meta data of block one
+		*    memcpy(one->data, mysource1, 100);  //fill buffer with data to write
+		*    dmaWriteBufs.enqueue(one);  //this will start the actual transfer of data from buffer 'one' to Dyplo
+		*    //while this transfer is busy you can fill buffer 'two'
+		*    two->bytes_used = 100;             //fill meta data of block two
+		*    memcpy(two->data, mysource2, 100);  //fill buffer with data to write
+		*    dmaWriteBufs.enqueue(two); //this will start the transfer of data from buffer 'two' to
+		*                               //Dyplo once the transfer from the previous buffer is ready
+		*    //continue by reusing the first block
+		*    one = dmaWriteBufs.dequeue();    // will block until the previous transfer is ready
+		*    ....
+		*
+		* B. READING DATA to memory from Dyplo using 2 buffers
+		*
+		*    CODE EXAMPLE
+		*    HardwareDMAFifo dmaReadBufs(File('/dev/dyplod1', O_RDONLY);
+		*    dmaReadBufs.reconfigure (MODE_COHERENT, 100, 2, false);
+		*    Block *one = dmaReadBufs.dequeue();
+		*    Block *two = dmaReadBufs.dequeue();
+		*    one->bytes_used = 100;       //set the number of bytes to read
+		*    dmaReadBufs.enqueue(one);    //this will start the actual transfer of data from Dyplo to buffer 'one'
+		*    two->bytes_used = 100;       /set the number of bytes to read
+		*    dmaReadBufs.enqueue(two);    //this will start the actual transfer of data from Dyplo to buffer 'two' (when one is ready)
+		*    one = dmaReadBufs.dequeue(); // will block until the transfer is ready
+		*    memcpy(mydata1, one->data, 100);  //do something with the data
+		*    dmaReadBufs.enqueue(one);         //starts (queues) another read of 100 bytes
+		*    two = dmaReadBufs.dequeue();       // will block until the transfer is ready
+		*    memcpy(mydata1, twp->data, 100);   //do something with the data
+		*    dmaReadBufs.enqueue(two);          //starts (queues) another read of 100 bytes
+		*     //and so on.
+		*/
 		Block* dequeue();
 		/* Send block to device. The block should have been obtained
 		 * using dequeue. Does not block. */
@@ -248,9 +331,9 @@ namespace dyplo
 			output_file.flush();
 		}
 
-        // FpgaImageReaderCallback interface
+		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
-        virtual void verifyStaticID(const unsigned int user_id);
+		virtual void verifyStaticID(const unsigned int user_id);
 	private:
 		File& output_file;
 	};
@@ -270,14 +353,14 @@ namespace dyplo
 
 		// returns amount of bytes of FPGA data read
 		size_t processFile(File& fpgaImageFile);
-        
+
 	protected:
 		virtual bool parseDescriptionTag(const char* data, unsigned short size, bool *is_partial, unsigned int *user_id);
 		virtual void processTag(char tag, unsigned short size, const void *data);
 
 	private:
 		FpgaImageReaderCallback& callback;
-    };
+	};
 
 	// can program via ICAP
 	class HardwareProgrammer : public FpgaImageReaderCallback
@@ -294,7 +377,7 @@ namespace dyplo
 
 		// FpgaImageReaderCallback interface
 		virtual ssize_t processData(const void* data, const size_t length_bytes);
-        virtual void verifyStaticID(const unsigned int user_id);
+		virtual void verifyStaticID(const unsigned int user_id);
 	protected:
 		// for DMA data stream to ICAP
 		HardwareDMAFifo* dma_writer;
