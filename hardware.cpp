@@ -614,6 +614,7 @@ namespace dyplo
 	{
 	}
 
+#if defined(__linux__)
 	static void* dma_map_single(int handle, int prot, off_t offset, size_t size)
 	{
 		void* map = ::mmap(NULL, size, prot, MAP_SHARED, handle, offset);
@@ -621,12 +622,15 @@ namespace dyplo
 			throw IOException("mmap");
 		return map;
 	}
+#endif
 
 	void HardwareDMAFifo::reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly)
 	{
 		struct dyplo_dma_configuration_req req;
+#if defined(__linux__)
 		const int prot = readonly ? PROT_READ : (PROT_READ | PROT_WRITE);
 		unmap();
+#endif
 		req.mode = mode;
 		req.size = size;
 		req.count = count;
@@ -650,7 +654,9 @@ namespace dyplo
 					{
 						if (::ioctl(handle, DYPLO_IOCDMABLOCK_QUERY, &(*it)) < 0)
 							throw IOException("DYPLO_IOCDMABLOCK_QUERY");
+#if defined (__linux__)
 						it->data = dma_map_single(handle, prot, it->offset, it->size);
+#endif
 					}
 					break;
 			}
