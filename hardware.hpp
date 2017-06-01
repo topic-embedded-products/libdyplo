@@ -222,7 +222,7 @@ namespace dyplo
 		void dispose();
 
 		/* About dequeue and enqueue
-		* 1. dequeue returns the next available buffer and gives ovwnership of
+		* 1. dequeue returns the next available buffer and gives ownership of
 		*    that buffer to the users application
 		*    - The number of buffers N was set with the method 'reconfigure'. An
 		*      application can call dequeue N times without returning a buffer

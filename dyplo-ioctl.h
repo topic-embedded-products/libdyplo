@@ -58,7 +58,9 @@ struct dyplo_buffer_block_alloc_req {
 
 struct dyplo_buffer_block {
 	__u32 id;	/* 0-based index of the buffer */
-	__u32 offset;	/* Location of data in memory map */
+	__u32 offset;	/* Location of data in memory map.
+					   NOTE: On platforms where no virtual memory is used (like RTEMS), "offset"
+					   represents the memory address of the block. */
 	__u32 size;	/* Size of buffer */
 	__u32 bytes_used; /* How much actually is in use */
 	__u16 user_signal; /* User signals (framing) either way */

@@ -47,7 +47,6 @@
 #include <iostream>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
-
 namespace dyplo
 {
 	const char* TruncatedFileException::what() const throw()
@@ -614,23 +613,28 @@ namespace dyplo
 	{
 	}
 
-#if defined(__linux__)
 	static void* dma_map_single(int handle, int prot, off_t offset, size_t size)
 	{
+#if defined (__rtems__)
+		// on RTEMS there is no need for virtual memory mappings.
+		// use the offset field to capture the memory address.
+		void* map  = (void*)offset;
+#else
 		void* map = ::mmap(NULL, size, prot, MAP_SHARED, handle, offset);
+
 		if (map == MAP_FAILED)
 			throw IOException("mmap");
+#endif
+
 		return map;
 	}
-#endif
 
 	void HardwareDMAFifo::reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly)
 	{
 		struct dyplo_dma_configuration_req req;
-#if defined(__linux__)
 		const int prot = readonly ? PROT_READ : (PROT_READ | PROT_WRITE);
 		unmap();
-#endif
+
 		req.mode = mode;
 		req.size = size;
 		req.count = count;
@@ -654,9 +658,7 @@ namespace dyplo
 					{
 						if (::ioctl(handle, DYPLO_IOCDMABLOCK_QUERY, &(*it)) < 0)
 							throw IOException("DYPLO_IOCDMABLOCK_QUERY");
-#if defined (__linux__)
 						it->data = dma_map_single(handle, prot, it->offset, it->size);
-#endif
 					}
 					break;
 			}
@@ -675,10 +677,8 @@ namespace dyplo
 
 	void HardwareDMAFifo::dispose()
 	{
-#if defined(__linux__)
 		unmap();
 		::ioctl(handle, DYPLO_IOCDMABLOCK_FREE);
-#endif
 	}
 
 	HardwareDMAFifo::Block* HardwareDMAFifo::dequeue()
@@ -746,7 +746,9 @@ namespace dyplo
 		{
 			if (it->data)
 			{
+#ifndef __rtems__
 				::munmap(it->data, it->size);
+#endif
 				it->data = NULL;
 			}
 		}
