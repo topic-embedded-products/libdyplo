@@ -27,6 +27,8 @@
  * Postbus 440, 5680 AK Best, The Netherlands.
  */
 
+#include <sys/time.h>
+
 extern "C"
 {
 #if defined(__linux__)
@@ -139,6 +141,9 @@ struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_LICENSE_KEY	0x30
 #define DYPLO_IOC_STATIC_ID	0x31
 
+#define DYPLO_IOC_POLL_FOR_INCOMING_DATA 0x40
+#define DYPLO_IOC_POLL_FOR_OUTGOING_DATA 0x41
+
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -215,3 +220,7 @@ struct dyplo_dma_configuration_req {
 
 /* Retrieve static ID (to match against partials) */
 #define DYPLO_IOCGSTATIC_ID   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_STATIC_ID, unsigned int)
+
+/* Poll for data */
+#define DYPLO_IOCPOLLFOR_INCOMING_DATA	_IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_POLL_FOR_INCOMING_DATA, struct timeval)
+#define DYPLO_IOCPOLLFOR_OUTGOING_DATA	_IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_POLL_FOR_OUTGOING_DATA, struct timeval)

@@ -88,7 +88,8 @@ namespace dyplo
 	{
 		std::ostringstream name;
 		name << prefix << "d" << index;
-		return ::open(name.str().c_str(), access);
+		// for RTEMS, use the varargs to also pass the "oflags" so that driver can interpret them
+		return ::open(name.str().c_str(), access, access);
 	}
 
 	int HardwareContext::openAvailableDMA(int access)

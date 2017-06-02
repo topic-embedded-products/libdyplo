@@ -26,9 +26,12 @@
  * You can contact Topic by electronic mail via info@topic.nl or via
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
+
+#include "dyplo-ioctl.h"
 #include "fileio.hpp"
 #include "exceptions.hpp"
 #include <errno.h>
+#include <sys/ioctl.h>
 
 namespace dyplo
 {
@@ -93,11 +96,22 @@ namespace dyplo
 			throw dyplo::IOException();
 	}
 
+
+
 	bool File::poll_for_incoming_data(struct timeval* timeout)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-		/*
+#if defined(__rtems__)
+		int status = ::ioctl(handle, DYPLO_IOCPOLLFOR_INCOMING_DATA, timeout);
+
+		if (status < 0)
+		{
+			throw IOException(__func__);
+		}
+		else
+		{
+			return (status != 0);
+		}
+#else
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(handle, &fds);
@@ -107,14 +121,23 @@ namespace dyplo
 			throw dyplo::IOException(__func__);
 
 		return status && FD_ISSET(handle, &fds);
-		*/
+#endif
 	}
 
 	bool File::poll_for_outgoing_data(struct timeval *timeout)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-		/*
+#if defined(__rtems__)
+		int status = ::ioctl(handle, DYPLO_IOCPOLLFOR_OUTGOING_DATA, timeout);
+
+		if (status < 0)
+		{
+			throw IOException(__func__);
+		}
+		else
+		{
+			return (status != 0);
+		}
+#else
 		fd_set fds;
 		FD_ZERO(&fds);
 		FD_SET(handle, &fds);
@@ -122,43 +145,31 @@ namespace dyplo
 		if (status < 0)
 			throw dyplo::IOException(__func__);
 		return status && FD_ISSET(handle, &fds);
-		*/
+#endif
 	}
 
 	bool File::poll_for_incoming_data(int timeout_in_seconds)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-		/*
 		struct timeval timeout;
 		timeout.tv_sec = timeout_in_seconds;
 		timeout.tv_usec = 0;
 		return poll_for_incoming_data(&timeout);
-		*/
 	}
 
 	bool File::poll_for_outgoing_data(int timeout_in_seconds)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-		/*
 		struct timeval timeout;
 		timeout.tv_sec = timeout_in_seconds;
 		timeout.tv_usec = 0;
 		return poll_for_outgoing_data(&timeout);
-		*/
 	}
 
 	off_t File::get_size(const char* path)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-		/*
 		struct stat info;
 		int status = ::stat(path, &info);
 		if (status < 0)
 			throw dyplo::IOException(path);
 		return info.st_size;
-		*/
 	}
 }
