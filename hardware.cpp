@@ -555,6 +555,12 @@ namespace dyplo
 		return getNodeAndFifoIndex(handle);
 	}
 
+	int HardwareFifo::getNodeIndex()
+	{
+		// lower byte represents the node index
+		return getNodeAndFifoIndex(handle) & 0xFF;
+	}
+
 	int HardwareFifo::getNodeAndFifoIndex(int file_descriptor)
 	{
 		int result = ::ioctl(file_descriptor, DYPLO_IOCQROUTE_QUERY_ID);

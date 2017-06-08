@@ -137,6 +137,7 @@ namespace dyplo
 		HardwareFifo(int file_descriptor): File(file_descriptor) {}
 		void reset(); /* Reset fifo */
 		int getNodeAndFifoIndex(); /* Returns node | fifo << 8 */
+		int getNodeIndex();
 		static int getNodeAndFifoIndex(int file_descriptor);
 		// format of parameter dstNodeAndFifoIndex: (nodeIndex | fifoIndex << 8)
 		void addRouteTo(int dstNodeAndFifoIndex);
@@ -215,7 +216,7 @@ namespace dyplo
 		/* Allocates "count" buffers of "size" bytes each. Size will be
 		 * rounded up to page size by the driver, count will max at 8.
 		 * Must be called before dequeue.
-		 * The readonly flag determines the memory map access. */
+		 * The readonly flag determines the memory map access (only applicable on Linux, ignored for RTEMS). */
 		void reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly);
 		/* Explicitly dispose of allocated DMA buffers. Also called from
 		 * destructor */
