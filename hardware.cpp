@@ -94,9 +94,8 @@ namespace dyplo
 
 	int HardwareContext::openAvailableDMA(int access)
 	{
-		throw IOException("Not yet implemented");
-
-		for (int index = 0; index < 31; ++index)
+		const int MAX_DMA_NODES = 4;
+		for (int index = 0; index < MAX_DMA_NODES; ++index)
 		{
 			int result = openDMA(index, access);
 			if (result != -1)
@@ -1029,7 +1028,6 @@ namespace dyplo
 			try
 			{
 				dma_writer = new HardwareDMAFifo(context.openAvailableDMA(O_RDWR));
-
 			}
 			catch (const std::exception&)
 			{
