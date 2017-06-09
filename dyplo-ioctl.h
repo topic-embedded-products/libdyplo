@@ -41,24 +41,24 @@ typedef __uint16_t __u16;
 } // extern "C"
 
 /* ioctl values for dyploctl device, set and get routing tables */
-struct dyplo_route_item_t {
+typedef struct dyplo_route_item_t {
 	unsigned char dstFifo; /* LSB */
 	unsigned char dstNode;
 	unsigned char srcFifo;
 	unsigned char srcNode; /* MSB */
-};
+} dyplo_route_item_t;
 
-struct dyplo_route_t  {
+typedef struct dyplo_route_t  {
 	unsigned int n_routes;
 	struct dyplo_route_item_t* proutes;
-};
+} dyplo_route_t;
 
-struct dyplo_buffer_block_alloc_req {
+typedef struct dyplo_buffer_block_alloc_req {
 	__u32 size;	/* Size of each buffer (will be page aligned) */
 	__u32 count;	/* Number of buffers */
-};
+} dyplo_buffer_block_alloc_req;
 
-struct dyplo_buffer_block {
+typedef struct dyplo_buffer_block {
 	__u32 id;	/* 0-based index of the buffer */
 	__u32 offset;	/* Location of data in memory map.
 					   NOTE: On platforms where no virtual memory is used (like RTEMS), "offset"
@@ -67,9 +67,9 @@ struct dyplo_buffer_block {
 	__u32 bytes_used; /* How much actually is in use */
 	__u16 user_signal; /* User signals (framing) either way */
 	__u16 state; /* Who's owner of the buffer */
-};
+} dyplo_buffer_block;
 
-struct dyplo_dma_standalone_config {
+typedef struct dyplo_dma_standalone_config {
 	__u32 offset;
 	__u32 burst_size;
 	__u32 incr_a;
@@ -78,7 +78,7 @@ struct dyplo_dma_standalone_config {
 	__u32 iterations_b;
 	__u32 incr_c;
 	__u32 iterations_c;
-};
+} dyplo_dma_standalone_config;
 
 /* DMA not used for CPU-logic transfers at all, only for logic
  * storage. Buffer can be mmap'ed for inspection. */
@@ -94,11 +94,11 @@ struct dyplo_dma_standalone_config {
  * Managing the cache may cost more than actually copying the data. */
 #define DYPLO_DMA_MODE_BLOCK_STREAMING	3
 
-struct dyplo_dma_configuration_req {
+typedef struct dyplo_dma_configuration_req {
 	__u32 mode;	/* One of DYPLO_DMA_MODE.. */
 	__u32 size;	/* Size of each buffer (will be page aligned) */
 	__u32 count;	/* Number of buffers */
-};
+} dyplo_dma_configuration_req;
 
 #define DYPLO_IOC_MAGIC	'd'
 #define DYPLO_IOC_ROUTE_CLEAR	0x00
