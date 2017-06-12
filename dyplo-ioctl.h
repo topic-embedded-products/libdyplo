@@ -126,7 +126,7 @@ typedef struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_USERSIGNAL_TELL	0x13
 
 #define DYPLO_IOC_DMA_RECONFIGURE	0x1F
-#define DYPLO_IOC_DMABLOCK_ALLOC	0x20
+#define DYPLO_IOC_DMABLOCK_ALLOC	0x20 // Deprecated interface. Reserved number (IOCTL numbers may not be re-used)
 #define DYPLO_IOC_DMABLOCK_FREE 	0x21
 #define DYPLO_IOC_DMABLOCK_QUERY	0x22
 #define DYPLO_IOC_DMABLOCK_ENQUEUE	0x23
