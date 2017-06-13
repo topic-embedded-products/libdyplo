@@ -1,5 +1,5 @@
 #
-#  Dyplo library makefile (based on lib makefile template)
+#  Dyplo library RTEMS makefile (based on lib makefile template)
 #
 
 LIBNAME=libdyplo.a        # xxx- your library names goes here
