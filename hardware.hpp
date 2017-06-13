@@ -157,6 +157,7 @@ namespace dyplo
 	// when large blocks of data need to be transferred, usage of DMA is
 	// typically faster and uses less CPU overhead. Please note that
 	// the CPU overhead is fixed and independent from the block data size.
+	// NOTE: The size of a DMA transfer need to be 64-bit aligned.
 	class HardwareDMAFifo: public HardwareFifo
 	{
 	public:
@@ -216,7 +217,9 @@ namespace dyplo
 		/* Allocates "count" buffers of "size" bytes each. Size will be
 		 * rounded up to page size by the driver, count will max at 8.
 		 * Must be called before dequeue.
-		 * The readonly flag determines the memory map access (only applicable on Linux, ignored for RTEMS). */
+		 * The readonly flag determines the memory map access (only applicable on Linux, ignored for RTEMS).
+		 * Note: Parameter "size" needs to be 64-bit aligned.
+		*/
 		void reconfigure(unsigned int mode, unsigned int size, unsigned int count, bool readonly);
 		/* Explicitly dispose of allocated DMA buffers. Also called from
 		 * destructor */
@@ -238,15 +241,15 @@ namespace dyplo
 		*
 		*    CODE EXAMPLE:
 		*    HardwareDMAFifo dmaWriteBufs(File('/dev/dyplod0', O_RW);
-		*    dmaWriteBufs.reconfigure (MODE_COHERENT, 100, 2, false);
+		*    dmaWriteBufs.reconfigure (MODE_COHERENT, 128, 2, false);
 		*    Block *one = dmaWriteBufs.dequeue();
 		*    Block *two = dmaWriteBufs.dequeue();
-		*    one->bytes_used = 100;              //fill meta data of block one
-		*    memcpy(one->data, mysource1, 100);  //fill buffer with data to write
+		*    one->bytes_used = 128;   //fill meta data of block one. NOTE: needs to be 64-bit aligned.
+		*    memcpy(one->data, mysource1, 128);  //fill buffer with data to write
 		*    dmaWriteBufs.enqueue(one);  //this will start the actual transfer of data from buffer 'one' to Dyplo
 		*    //while this transfer is busy you can fill buffer 'two'
-		*    two->bytes_used = 100;             //fill meta data of block two
-		*    memcpy(two->data, mysource2, 100);  //fill buffer with data to write
+		*    two->bytes_used = 128;   //fill meta data of block two. NOTE: needs to be 64-bit aligned.
+		*    memcpy(two->data, mysource2, 128);  //fill buffer with data to write
 		*    dmaWriteBufs.enqueue(two); //this will start the transfer of data from buffer 'two' to
 		*                               //Dyplo once the transfer from the previous buffer is ready
 		*    //continue by reusing the first block
@@ -257,19 +260,19 @@ namespace dyplo
 		*
 		*    CODE EXAMPLE
 		*    HardwareDMAFifo dmaReadBufs(File('/dev/dyplod1', O_RDONLY);
-		*    dmaReadBufs.reconfigure (MODE_COHERENT, 100, 2, false);
+		*    dmaReadBufs.reconfigure (MODE_COHERENT, 128, 2, false);
 		*    Block *one = dmaReadBufs.dequeue();
 		*    Block *two = dmaReadBufs.dequeue();
-		*    one->bytes_used = 100;       //set the number of bytes to read
+		*    one->bytes_used = 128;   //set the number of bytes to read. NOTE: needs to be 64-bit aligned
 		*    dmaReadBufs.enqueue(one);    //this will start the actual transfer of data from Dyplo to buffer 'one'
-		*    two->bytes_used = 100;       /set the number of bytes to read
+		*    two->bytes_used = 128;   //set the number of bytes to read. NOTE: needs to be 64-bit aligned.
 		*    dmaReadBufs.enqueue(two);    //this will start the actual transfer of data from Dyplo to buffer 'two' (when one is ready)
 		*    one = dmaReadBufs.dequeue(); // will block until the transfer is ready
-		*    memcpy(mydata1, one->data, 100);  //do something with the data
-		*    dmaReadBufs.enqueue(one);         //starts (queues) another read of 100 bytes
+		*    memcpy(mydata1, one->data, 128);  //do something with the data
+		*    dmaReadBufs.enqueue(one);         //starts (queues) another read of 128 bytes
 		*    two = dmaReadBufs.dequeue();       // will block until the transfer is ready
-		*    memcpy(mydata1, twp->data, 100);   //do something with the data
-		*    dmaReadBufs.enqueue(two);          //starts (queues) another read of 100 bytes
+		*    memcpy(mydata1, twp->data, 128);   //do something with the data
+		*    dmaReadBufs.enqueue(two);          //starts (queues) another read of 128 bytes
 		*     //and so on.
 		*/
 		Block* dequeue();
