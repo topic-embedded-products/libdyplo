@@ -29,7 +29,9 @@
 #include <unistd.h>
 #include "yaffut.h"
 #include "hardware.hpp"
+#ifdef __linux__
 #include "config.h"
+#endif
 #include <vector>
 #include <list>
 #include <string>
@@ -85,6 +87,7 @@ public:
 	virtual ssize_t processData(const void* data, const size_t length_bytes)
 	{
 		// do nothing
+		return 0;
 	}
 
 	virtual void verifyStaticID(const unsigned int user_id)
@@ -197,7 +200,7 @@ TEST(hardware_programmer, bin_file)
 		bitstreamToRead.seek(0);
 		EQUAL(0x10000u, reader.processFile(bitstreamToRead));
 		xdevcfg.seek(0);
-		EQUAL(0x10000u, xdevcfg.read(&buffer[0], 0x10000u)); /* Properly truncated */
+		EQUAL(0x10000, xdevcfg.read(&buffer[0], 0x10000u)); /* Properly truncated */
 		for (unsigned int i = 0; i < buffer.size(); ++i)
 			EQUAL(i, buffer[i]);
 	}
@@ -241,7 +244,7 @@ TEST(hardware_programmer, partial_file)
 		EQUAL(expected_size, readerWithTagger.processFile(bitstreamToRead));
 		std::vector<unsigned char> buffer(sizeof(valid_partial_bitstream));
 		xdevcfg.seek(0);
-		EQUAL(expected_size, xdevcfg.read(&buffer[0], expected_size)); // Properly truncated
+		EQUAL((int)expected_size, xdevcfg.read(&buffer[0], expected_size)); // Properly truncated
 		CHECK(memcmp(valid_partial_bitstream, &buffer[0], expected_size) == 0);
 	}
 

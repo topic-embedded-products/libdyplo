@@ -26,6 +26,8 @@
  * You can contact Topic by electronic mail via info@topic.nl or via
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
+
+#include <sys/time.h>
 #include <unistd.h>
 #include <errno.h>
 #include <vector>
@@ -512,7 +514,6 @@ TEST(hardware_driver, d_io_control_fifo_reset)
 
 	ctrl.routeDeleteAll();
 }
-
 
 TEST(hardware_driver, e_transmit_loop)
 {
@@ -1252,7 +1253,7 @@ static void* thread_send_many_blocks(void* arg)
 		for (int block = 0; block < how_many_blocks; ++block)
 		{
 			unsigned int count = q->begin_write(data, 2048);
-			EQUAL(2048, count);
+			EQUAL(2048u, count);
 			for (unsigned int i=0; i<count; ++i)
 			{
 				data[i] = counter;
@@ -1530,7 +1531,7 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 		dyplo::HardwareFifo dma0r(context.openDMA((dma_index + 1) % number_of_dma_nodes, O_RDONLY));
 
 		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
-		unsigned int dmaBufferSize = dma0w.getDataTreshold();
+		int dmaBufferSize = dma0w.getDataTreshold();
 		/* Expect a sensible size, even 1k is rediculously small, but still
 		 * bigger than what the (non-DMA) CPU node would support */
 		CHECK(dmaBufferSize > 1024);
@@ -1607,7 +1608,7 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
 		dyplo::HardwareFifo dma0r(context.openDMA(dma_index, O_RDONLY));
 		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
-		unsigned int dmaBufferSize = dma0w.getDataTreshold();
+		int dmaBufferSize = dma0w.getDataTreshold();
 		unsigned int dmaBufferSizeWords = dmaBufferSize >> 2;
 		unsigned int seed = 0;
 		std::vector<unsigned int> testdata(dmaBufferSizeWords);
@@ -1626,7 +1627,7 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		for (unsigned int i = 0; i < words; ++i)
 			EQUAL(seed + i, testresult[i]);
 		/* Pick a different size */
-		const unsigned int thd = (dmaBufferSize == 4096) ? 2048 : 4096;
+		unsigned int thd = (dmaBufferSize == 4096) ? 2048 : 4096;
 		/* Cannot change treshold because DMA is "primed" */
 		ASSERT_THROW(dma0r.setDataTreshold(thd), dyplo::IOException);
 		/* Reset the DMA controller to be able to change the value */
@@ -1635,7 +1636,7 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		EQUAL(thd, dma0r.getDataTreshold());
 		/* Check if the new treshold works by transferring one block */
 		CHECK(!dma0r.poll_for_incoming_data(0));
-		EQUAL(thd, dma0w.write(&testdata[0], thd));
+		EQUAL(static_cast<int>(thd), dma0w.write(&testdata[0], thd));
 		CHECK(dma0r.poll_for_incoming_data(1));
 		bytes = dma0r.read(&testresult[0], thd);
 		words = bytes / sizeof(int);
@@ -1645,14 +1646,14 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		/* Change it back to the default */
 		dma0r.reset();
 		dma0r.setDataTreshold(dmaBufferSize);
-		EQUAL(dmaBufferSize, dma0r.getDataTreshold());
+		EQUAL(static_cast<unsigned int>(dmaBufferSize), dma0r.getDataTreshold());
 		dma0w.reset();
 		CHECK(!dma0r.poll_for_incoming_data(0));
 
 		EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
 		CHECK(dma0r.poll_for_incoming_data(1));
 		bytes = dma0r.read(&testresult[0], dmaBufferSize);
-		EQUAL(dmaBufferSize, bytes);
+		EQUAL(static_cast<unsigned int>(dmaBufferSize), bytes);
 	}
 }
 
@@ -1708,7 +1709,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 		{
 			dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
 			CHECK(block != NULL);
-			EQUAL(0, block->bytes_used);
+			EQUAL(0u, block->bytes_used);
 			EQUAL(blocksize, block->size);
 			block->bytes_used = block->size;
 			dma0r.enqueue(block);
@@ -1801,7 +1802,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 		{
 			block = dma0r.dequeue();
 			CHECK(block != NULL);
-			EQUAL(0, block->bytes_used);
+			EQUAL(0u, block->bytes_used);
 			EQUAL(blocksize, block->size);
 			block->bytes_used = block->size;
 			dma0r.enqueue(block);
@@ -1931,7 +1932,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4from_regular_dma)
 	static const int dma_index = number_of_dma_nodes / 2;
 	static const unsigned int transfer_mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
 	/* blocksize that is 8-byte aligned but not page aligned */
-	static const unsigned int blocksize = 111 * 104;
+	static const int blocksize = 111 * 104;
 	static const unsigned int num_blocks = 2;
 
 	/* Writing part opens in "standard" DMA mode */
@@ -1979,7 +1980,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4from_regular_dma)
 			dyplo::HardwareDMAFifo::Block *block = dma0r.dequeue();
 			CHECK(block != NULL);
 			CHECK(!block->state);
-			EQUAL(blocksize, block->bytes_used);
+			EQUAL(static_cast<unsigned int>(blocksize), block->bytes_used);
 			unsigned int num_words = block->bytes_used / sizeof(unsigned int);
 			unsigned int* data = (unsigned int*)block->data;
 			for (unsigned int j = 0; j < num_words; ++j)
@@ -2040,7 +2041,12 @@ TEST(hardware_driver_ctx, q_dma_standalone_busy)
 {
 	static const int dma_index = 0;
 	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+#ifdef __rtems__
+	ASSERT_THROW(dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR)), dyplo::IOException);
+#else
 	ASSERT_THROW(dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR|O_DIRECT)), dyplo::IOException);
+#endif
+
 }
 
 std::ostream& operator<<(std::ostream& os, const dyplo::HardwareDMAFifo::StandaloneConfiguration& cfg)
@@ -2260,44 +2266,44 @@ TEST(hardware_driver_ctx, q_fifo_usersignal)
 	int data = 0x12345678;
 	int result = 0;
 	EQUAL(0, fifo2.getUserSignal()); /* Signal is initially 0 */
-	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
-	EQUAL(sizeof(result), fifo1.read(&result, sizeof(result)));
+	EQUAL(static_cast<int>(sizeof(data)), fifo2.write(&data, sizeof(data)));
+	EQUAL(static_cast<int>(sizeof(result)), fifo1.read(&result, sizeof(result)));
 	EQUAL(data, result);
 	EQUAL(0, fifo1.getUserSignal());
 
 	++data;
 	fifo2.setUserSignal(1);
 	EQUAL(1, fifo2.getUserSignal());
-	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	EQUAL(static_cast<int>(sizeof(data)), fifo2.write(&data, sizeof(data)));
 	/* Change in user signal causes read() to return less data, even
 	 * though the data has already arrived. */
 	CHECK(fifo1.poll_for_incoming_data(1));
 	EQUAL(0, fifo1.read(&result, sizeof(result)));
 	EQUAL(1, fifo1.getUserSignal());
 	/* Next read returns the data */
-	EQUAL(sizeof(result), fifo1.read(&result, sizeof(result)));
+	EQUAL(static_cast<int>(sizeof(result)), fifo1.read(&result, sizeof(result)));
 	EQUAL(data, result);
 
     /* Transfer 3 items each with different usersignals */
 	data = 101;
-	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	EQUAL(static_cast<int>(sizeof(data)), fifo2.write(&data, sizeof(data)));
 	fifo2.setUserSignal(2);
 	++data;
-	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	EQUAL(static_cast<int>(sizeof(data)), fifo2.write(&data, sizeof(data)));
 	fifo2.setUserSignal(3);
 	++data;
-	EQUAL(sizeof(data), fifo2.write(&data, sizeof(data)));
+	EQUAL(static_cast<int>(sizeof(data)), fifo2.write(&data, sizeof(data)));
 	CHECK(fifo1.poll_for_incoming_data(1));
 	int results[4];
 	/* Read must only return a single item even though more are available */
-	EQUAL(sizeof(results[0]), fifo1.read(results, sizeof(results)));
+	EQUAL(static_cast<int>(sizeof(results[0])), fifo1.read(results, sizeof(results)));
 	EQUAL(101, results[0]);
 	/* The signal is for the NEXT read, not the previous */
 	EQUAL(2, fifo1.getUserSignal());
-	EQUAL(sizeof(results[0]), fifo1.read(results, sizeof(results)));
+	EQUAL(static_cast<int>(sizeof(results[0])), fifo1.read(results, sizeof(results)));
 	EQUAL(102, results[0]);
 	EQUAL(3, fifo1.getUserSignal());
-	EQUAL(sizeof(results[0]), fifo1.read(results, sizeof(results[0])));
+	EQUAL(static_cast<int>(sizeof(results[0])), fifo1.read(results, sizeof(results[0])));
 	EQUAL(103, results[0]);
 	EQUAL(3, fifo1.getUserSignal());
 }
@@ -2309,8 +2315,8 @@ TEST(hardware_driver_ctx, q_dma_usersignal)
 	dyplo::HardwareFifo fifo2(context.openFifo(0, O_WRONLY|O_APPEND));
 	fifo1.addRouteFrom(fifo2.getNodeAndFifoIndex());
 
-	const unsigned int blocksize = (unsigned int)fifo1.getDataTreshold();
-	const unsigned int smallblock = sizeof(int) * 64;
+	const int blocksize = (unsigned int)fifo1.getDataTreshold();
+	const int smallblock = sizeof(int) * 64;
 
 	std::vector<int> data(blocksize/sizeof(int));
 	std::vector<int> result(blocksize/sizeof(int));
@@ -2363,7 +2369,7 @@ TEST(hardware_driver, z_static_id)
 void programIcapAndVerify(dyplo::HardwareContext& context)
 {
 	dyplo::HardwareControl ctrl(context);
-	unsigned int icap_index = ctrl.getIcapNodeIndex(); // TODO: Fetch from logic
+	int icap_index = ctrl.getIcapNodeIndex(); // TODO: Fetch from logic
 	dyplo::HardwareConfig icap = context.openConfig(icap_index, O_RDWR);
 	EQUAL(icap_index, icap.getNodeIndex());
 
