@@ -132,12 +132,14 @@ private:
 	std::map<char, std::string> tags;
 };
 
+// testing bin / bit support by FpgaImageReader
+#ifndef __rtems__
+
 static unsigned int bswap32(unsigned int x)
 {
 	return (x << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xFF000000) >> 24);
 }
 
-// testing bin / bit support by FpgaImageReader
 TEST(hardware_programmer, bin_file)
 {
 	TestContext tc;
@@ -261,6 +263,7 @@ TEST(hardware_programmer, partial_file)
 
 	::unlink("/tmp/xdevcfg");
 }
+#endif
 
 TEST(hardware_programmer, parse_description_tag)
 {
@@ -332,6 +335,7 @@ public:
 
 TEST(hardware_programmer, find_bitstreams)
 {
+	mkdir("tmp", 0755);
 	dyplo::HardwareContext context("/tmp/dyplo"); /* Fake device */
 	LotsOfFiles f;
 	f.dir("/tmp/dyplo_func_1");

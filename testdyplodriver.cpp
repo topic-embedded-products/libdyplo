@@ -39,7 +39,10 @@
 #include "mutex.hpp"
 #include "hardware.hpp"
 
+#ifndef __rtems__
 #define YAFFUT_MAIN
+#endif
+
 #include "yaffut.h"
 
 #include <time.h>
@@ -178,17 +181,13 @@ struct hardware_driver_hdl: public hardware_driver_ctx
 					context.findPartition("adder", id);
 				if (!filename.empty())
 				{
-					ctrl.disableNode(id);
-					programmer.fromFile(filename.c_str());
+					programmer.programNodeFromFile(id, filename.c_str());
 					adders.push_back(id);
 					if (adders.size() >= 2)
 						break; /* Two is enough */
 				}
 			}
 		}
-		for (std::vector<unsigned char>::iterator it = adders.begin();
-			it != adders.end(); ++it)
-			ctrl.enableNode(*it);
 		/* Need at least 2 adders for these tests */
 		CHECK(adders.size() >= 2);
 	}
@@ -360,6 +359,7 @@ TEST(hardware_driver_ctx, d_io_control_route_directly_dma)
 	ASSERT_THROW(dma0w.addRouteFrom(dma0r_id), dyplo::IOException);
 }
 
+#ifndef __rtems__ // RTEMS test bitstream is not suitable for this test (different kind of adder)
 TEST(hardware_driver_hdl, d_io_control_route_hdl)
 {
 	dyplo::HardwareControl::Route routes[64];
@@ -421,6 +421,7 @@ TEST(hardware_driver_hdl, d_io_control_route_hdl)
 		ctrl.routeGetAll(routes, sizeof(routes)/sizeof(routes[0]));
 	EQUAL(0, n_routes);
 }
+#endif
 
 TEST(hardware_driver, d_io_control_backplane)
 {
@@ -929,6 +930,58 @@ TEST(hardware_driver_ctx, i_cpu_block_crossbar)
 	}
 }
 
+#ifdef __rtems__
+// different test configuration for RTEMS test bitstream.
+// RTEMS doesnt have a 4-port adder, so only do a simple test for now..
+TEST(hardware_driver_hdl, j_hdl_block_processing)
+{
+	static const int hdl_configuration_blob[] = {
+		3
+	};
+	static const int hdl_configuration_blob2[] = {
+		-4
+	};
+	const unsigned char ADDER1 = adders[0];
+	const unsigned char ADDER2 = adders[1];
+	const dyplo::HardwareControl::Route routes[] = {
+		{0, ADDER1, 0, 0},      /* Fifo 0 to HDL #1 port 0 */
+		{0, ADDER2, 0, ADDER1}, /* Fifo 0 to HDL #2 port 0 */
+		{0, 0, 0, ADDER2}
+	};
+	dyplo::HardwareControl(context).routeAdd(routes, sizeof(routes)/sizeof(routes[0]));
+	int data[] = {3, 8, 5, 1116, 7, 338, 9, 124};
+	const size_t data_size = sizeof(data)/sizeof(data[0]);
+
+	/* configure HDL blocks with coefficients */
+	{
+		File hdl_config(context.openConfig(adders[0], O_WRONLY));
+		EQUAL((ssize_t)sizeof(hdl_configuration_blob),
+			hdl_config.write(hdl_configuration_blob, sizeof(hdl_configuration_blob)));
+	}
+	{
+		File hdl_config(context.openConfig(adders[1], O_WRONLY));
+		EQUAL((ssize_t)sizeof(hdl_configuration_blob2),
+			hdl_config.write(hdl_configuration_blob2, sizeof(hdl_configuration_blob2)));
+	}
+	/* Write some test data */
+	{
+		File hdl_in(context.openFifo(0, O_WRONLY|O_APPEND));
+		ssize_t bytes_written = hdl_in.write(data, sizeof(data));
+		EQUAL((ssize_t)sizeof(data), bytes_written);
+		/* Read results and verify */
+		File hdl_out(context.openFifo(0, O_RDONLY));
+		CHECK(hdl_out.poll_for_incoming_data(2)); /* Must have data */
+		int buffer[data_size];
+		ssize_t bytes_read = hdl_out.read(buffer, sizeof(buffer));
+		EQUAL((ssize_t)sizeof(buffer), bytes_read);
+		/* Check results: End result should be "MINUS 1" operation */
+		for (unsigned int i=0; i < data_size; ++i)
+			EQUAL(data[i] + hdl_configuration_blob[0] + hdl_configuration_blob2[0], buffer[i]);
+	}
+
+	check_all_input_fifos_are_empty();
+}
+#else
 TEST(hardware_driver_hdl, j_hdl_block_processing)
 {
 	static const int hdl_configuration_blob[] = {
@@ -1239,7 +1292,7 @@ TEST(hardware_driver_hdl, l_hdl_block_maze_route_dma)
 		}
 	}
 }
-
+#endif
 
 static const int how_many_blocks = 1024;
 
@@ -1317,7 +1370,7 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 				unsigned int raw_count = input.begin_read(data, 2);
 				CHECK(raw_count != 0);
 				CHECK(raw_count <= 2048);
-				if (raw_count > 142)
+				if (raw_count > 142) // process up to 142 words, just to test
 					count = 142;
 				else
 					count = raw_count;
@@ -1576,7 +1629,12 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 			}
 			catch (const dyplo::IOException& ex)
 			{
+#ifdef __rtems__
+				// ENODEV is used to map 'EAGAIN-like' behaviour
+				EQUAL(ENODEV, ex.m_errno);
+#else
 				EQUAL(EAGAIN, ex.m_errno);
+#endif
 				break;
 			}
 		}
@@ -1651,6 +1709,7 @@ TEST(hardware_driver_ctx, p_dma_reset)
 		CHECK(!dma0r.poll_for_incoming_data(0));
 
 		EQUAL(dmaBufferSize, dma0w.write(&testdata[0], dmaBufferSize));
+
 		CHECK(dma0r.poll_for_incoming_data(1));
 		bytes = dma0r.read(&testresult[0], dmaBufferSize);
 		EQUAL(static_cast<unsigned int>(dmaBufferSize), bytes);
@@ -1669,7 +1728,7 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 		static const unsigned int blocksize = 64 * 1024;
 		static const unsigned int num_blocks = 8;
 
-		unsigned int dummy_data;
+		uint64_t dummy_data;
 
 		/* For memory mapping to work on a writeable device, you have to open it in R+W mode */
 		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
@@ -1680,7 +1739,9 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 			const dyplo::HardwareDMAFifo::Block *block = dma0w.at(i);
 			EQUAL(i, block->id);
 			EQUAL(blocksize, block->size);
+#ifndef __rtems__
 			EQUAL(i * blocksize, block->offset);
+#endif
 			CHECK(block->data != NULL);
 		}
 
@@ -1697,7 +1758,9 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 			const dyplo::HardwareDMAFifo::Block *block = dma0r.at(i);
 			EQUAL(i, block->id);
 			EQUAL(blocksize, block->size);
+#ifndef __rtems__
 			EQUAL(i * blocksize, block->offset);
+#endif
 			CHECK(block->data != NULL);
 		}
 
@@ -2042,7 +2105,7 @@ TEST(hardware_driver_ctx, q_dma_standalone_busy)
 	static const int dma_index = 0;
 	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
 #ifdef __rtems__
-	ASSERT_THROW(dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR)), dyplo::IOException);
+	ASSERT_THROW(dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR | O_SYNC)), dyplo::IOException);
 #else
 	ASSERT_THROW(dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR|O_DIRECT)), dyplo::IOException);
 #endif
@@ -2092,7 +2155,11 @@ TEST(hardware_driver_ctx, q_dma_standalone_config_readback)
 
 TEST(hardware_driver_ctx, q_dma_standalone_pass)
 {
+#ifdef __rtems__
+	static const int standalone_dma_index = 1; // RTEMS test bitstream configuration
+#else
 	static const int standalone_dma_index = 2;
+#endif
 	static const unsigned int blocksize = 64 * 1024;
 	static const unsigned int blocksize_words = blocksize / sizeof(unsigned int);
 	static const unsigned int num_blocks = 1;
@@ -2119,7 +2186,11 @@ TEST(hardware_driver_ctx, q_dma_standalone_pass)
 	dma_sa.setStandaloneConfig(&cfg2, true);
 
 	/* Set up traffic from CPU to standalone node and back */
+#ifdef __rtems__
+	static const int transfer_dma_index = 0; // RTEMS test bitstream configuration
+#else
 	static const int transfer_dma_index = 1;
+#endif
 	dyplo::HardwareFifo to_logic(context.openDMA(transfer_dma_index, O_WRONLY));
 	dyplo::HardwareFifo from_logic(context.openDMA(transfer_dma_index, O_RDONLY));
 	to_logic.addRouteTo(dma_sa.getNodeAndFifoIndex());
@@ -2198,7 +2269,7 @@ static void standalone_transform(char* dst, const char* src,
 
 TEST(hardware_driver_ctx, q_dma_standalone_rearrange_2D)
 {
-	static const int standalone_dma_index = 0;
+	static const int standalone_dma_index = 1;
 	static const unsigned int blocksize = 64 * 1024;
 	static const unsigned int blocksize_words = blocksize / sizeof(unsigned int);
 	static const unsigned int num_blocks = 1;
@@ -2226,9 +2297,11 @@ TEST(hardware_driver_ctx, q_dma_standalone_rearrange_2D)
 	dma_sa.setStandaloneConfig(&cfg2, false);
 
 	/* Set up traffic from CPU to standalone node and back */
-	static const int transfer_dma_index = 1;
-	dyplo::HardwareFifo to_logic(context.openDMA(transfer_dma_index, O_WRONLY));
-	dyplo::HardwareFifo from_logic(context.openDMA(transfer_dma_index, O_RDONLY));
+	static const int transfer_dma_index = 0;
+	dyplo::HardwareDMAFifo to_logic(context.openDMA(transfer_dma_index, O_WRONLY));
+	to_logic.reconfigure(dyplo::HardwareDMAFifo::MODE_RINGBUFFER, 1, 1, false);
+	dyplo::HardwareDMAFifo from_logic(context.openDMA(transfer_dma_index, O_RDONLY));
+	from_logic.reconfigure(dyplo::HardwareDMAFifo::MODE_RINGBUFFER, 1, 1, true);
 	to_logic.addRouteTo(dma_sa.getNodeAndFifoIndex());
 	from_logic.addRouteFrom(dma_sa.getNodeAndFifoIndex());
 
@@ -2284,7 +2357,7 @@ TEST(hardware_driver_ctx, q_fifo_usersignal)
 	EQUAL(static_cast<int>(sizeof(result)), fifo1.read(&result, sizeof(result)));
 	EQUAL(data, result);
 
-    /* Transfer 3 items each with different usersignals */
+	/* Transfer 3 items each with different usersignals */
 	data = 101;
 	EQUAL(static_cast<int>(sizeof(data)), fifo2.write(&data, sizeof(data)));
 	fifo2.setUserSignal(2);
@@ -2310,7 +2383,8 @@ TEST(hardware_driver_ctx, q_fifo_usersignal)
 
 TEST(hardware_driver_ctx, q_dma_usersignal)
 {
-	dyplo::HardwareFifo fifo1(context.openDMA(0, O_RDONLY));
+	dyplo::HardwareDMAFifo fifo1(context.openDMA(0, O_RDONLY));
+	fifo1.reconfigure(dyplo::HardwareDMAFifo::MODE_RINGBUFFER, 1, 1, true);
 	//dyplo::HardwareFifo fifo2(context.openDMA(0, O_WRONLY|O_APPEND));
 	dyplo::HardwareFifo fifo2(context.openFifo(0, O_WRONLY|O_APPEND));
 	fifo1.addRouteFrom(fifo2.getNodeAndFifoIndex());
@@ -2374,13 +2448,18 @@ void programIcapAndVerify(dyplo::HardwareContext& context)
 	EQUAL(icap_index, icap.getNodeIndex());
 
 	std::vector<unsigned char> pr_nodes;
-	/* First program "testNode" using ICAP */
+	/* First program a node using ICAP */
 	{
 		dyplo::HardwareProgrammer programmer(context, ctrl);
 		for (unsigned char id = 0; id < 32; ++id)
 		{
+#ifdef __rtems__
+			std::string filename =
+				context.findPartition("data_producer", id);
+#else
 			std::string filename =
 				context.findPartition("testNode", id);
+#endif
 			if (!filename.empty())
 			{
 				ctrl.disableNode(id);
@@ -2446,13 +2525,18 @@ TEST(hardware_driver_ctx, a_program_icap_via_cpu_fifo)
 {
 	// occupy all DMA nodes (forcing fallback on CPU node for programming ICAP)
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
-	std::list<dyplo::HardwareDMAFifo> dmaFifos;
+	std::list<dyplo::HardwareDMAFifo*> dmaFifos;
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
-		dmaFifos.push_back(context.openDMA(dma_index, O_WRONLY));
+		dmaFifos.push_back(new dyplo::HardwareDMAFifo(context.openDMA(dma_index, O_WRONLY)));
 	}
 
 	// will try to program via CPU to ICAP
 	programIcapAndVerify(context);
+	std::list<dyplo::HardwareDMAFifo*>::iterator it = dmaFifos.begin();
+	while (it != dmaFifos.end())
+	{
+		delete*it;
+		++it;
+	}
 }
-

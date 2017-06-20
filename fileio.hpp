@@ -97,6 +97,8 @@ namespace dyplo
 		 * F_GETFL and ORs the result with the flag for F_SETFL. */
 		void fcntl_set_flag(long flag);
 
+        bool wait_for_incoming_data();
+        bool wait_for_outgoing_data();
 		bool poll_for_incoming_data(int timeout_in_seconds);
 		bool poll_for_outgoing_data(int timeout_in_seconds);
 		bool poll_for_incoming_data(struct timeval *timeout);

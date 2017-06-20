@@ -30,6 +30,8 @@
 #include <sys/poll.h>
 #include <sstream>
 #include "filequeue.hpp"
+#include "dyplo-ioctl.h"
+#include <sys/ioctl.h>
 
 #ifdef __rtems__
 // TODO
@@ -105,64 +107,84 @@ namespace dyplo
 	FilePollScheduler::FilePollScheduler():
 		m_interrupted(false)
 	{
+#ifndef __rtems__
 		set_non_blocking(m_internal_pipe.read_handle());
+#endif
 	}
 
 	void FilePollScheduler::wait_readable(int filehandle)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-
-		/*
 		if (m_interrupted)
 			throw InterruptedException();
+
+#if defined(__rtems__)
+
+		int status = ::ioctl(filehandle, DYPLO_IOCWAITFOR_INCOMING_DATA);
+
+		if (status < 0)
+		{
+			throw std::runtime_error("poll ioctl failed");
+		}
+#else
 		struct pollfd fds[2];
 		fds[0].fd = filehandle;
 		fds[0].events = POLLIN | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
 		fds[1].fd = m_internal_pipe.read_handle();
 		fds[1].events = POLLIN | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
-		int result = poll(fds, 2, -1);
+		int result = ::poll(fds, 2, -1);
 		if (result == -1)
 			throw std::runtime_error("poll() failed");
 		if (fds[1].revents)
 			throw InterruptedException();
-		*/
+#endif
 	}
 
 	void FilePollScheduler::wait_writeable(int filehandle)
 	{
-		// TODO implement
-		throw std::runtime_error("Not yet implemented");
-
-		/*
 		if (m_interrupted)
 			throw InterruptedException();
+#if defined(__rtems__)
+
+		int status = ::ioctl(filehandle, DYPLO_IOCWAITFOR_OUTGOING_DATA);
+
+		if (status < 0)
+		{
+			throw std::runtime_error("poll ioctl failed");
+		}
+#else
 		struct pollfd fds[2];
 		fds[0].fd = filehandle;
 		fds[0].events = POLLOUT | POLLERR | POLLHUP | POLLNVAL;
 		fds[1].fd = m_internal_pipe.read_handle();
 		fds[1].events = POLLIN | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
-		int result = poll(fds, 2, -1);
+		int result = ::poll(fds, 2, -1);
 		if (result == -1)
 			throw std::runtime_error("poll() failed");
 		if (fds[1].revents)
 			throw InterruptedException();
-		*/
+#endif
 	}
 
 	void FilePollScheduler::interrupt()
 	{
-		char dummy = 'q';
 		m_interrupted = true;
+
+		// On RTEMS, waiting operation can be interrupted by closing the filedescriptor of the fifo
+#ifndef __rtems__
+		char dummy = 'q';
 		if (::write(m_internal_pipe.write_handle(), &dummy, 1) < 0)
 			throw IOException();
+#endif
 	}
 
 	void FilePollScheduler::reset()
 	{
+#ifndef __rtems__
 		char dummy[16];
 		while (::read(m_internal_pipe.read_handle(), dummy, sizeof(dummy)) == sizeof(dummy))
 		{}
+#endif
+
 		m_interrupted = false;
 	}
 }

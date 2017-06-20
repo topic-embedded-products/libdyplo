@@ -26,8 +26,10 @@
  * You can contact Topic by electronic mail via info@topic.nl or via
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
-#ifdef __linux__
+#if defined( __linux__)
 #include "config.h"
+#elif defined(__rtems__)
+#include <rtems/endian.h>
 #endif
 #include "hardware.hpp"
 #include "directoryio.hpp"
@@ -45,6 +47,7 @@
 #include <assert.h>
 
 #include <iostream>
+#include <cassert>
 
 #define DYPLO_DRIVER_PREFIX "/dev/dyplo"
 namespace dyplo
@@ -595,7 +598,7 @@ namespace dyplo
 		int result = ::ioctl(handle, DYPLO_IOCTTRESHOLD, value);
 		if (result < 0)
 			throw IOException(__func__);
-		else if (((unsigned int)result) != value)
+		else if ((result != 0) && ((unsigned int)result != value))
 			throw ArgumentOutOfRangeHasBeenTruncatedException(result);
 	}
 
@@ -694,8 +697,13 @@ namespace dyplo
 		{
 			int status = ::ioctl(handle, DYPLO_IOCDMABLOCK_DEQUEUE, result);
 			if (status < 0) {
+#if defined(__rtems__)
+				if (errno == ENODEV)
+					return NULL;
+#else
 				if (errno == EAGAIN)
 					return NULL;
+#endif
 				throw IOException("DYPLO_IOCDMABLOCK_DEQUEUE");
 			}
 		}
@@ -930,7 +938,9 @@ namespace dyplo
 				}
 			}
             
+#if (BYTE_ORDER == LITTLE_ENDIAN)
 			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
+#endif
 			bytes = callback.processData(buffer_start, total_bytes);
 			if (bytes < 0)
 			{
@@ -954,7 +964,9 @@ namespace dyplo
 					throw TruncatedFileException();
 				}
                 
+#if (BYTE_ORDER == LITTLE_ENDIAN)
 				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
+#endif
 				bytes = callback.processData(buffer_start, to_read);
 				if (bytes < 0)
 				{
@@ -993,6 +1005,9 @@ namespace dyplo
 
 			do
 			{
+#if (BYTE_ORDER == BIG_ENDIAN)
+				swap_buffer_aligned((unsigned int*)buffer_start, bytes>>2);
+#endif
 				ssize_t bytes_written = callback.processData(buffer_start, bytes);
 				if (bytes_written < bytes)
 				{

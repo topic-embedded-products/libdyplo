@@ -32,7 +32,9 @@
 #include <stdio.h>
 #include "hardware.hpp"
 
+#ifndef __rtems__
 #define YAFFUT_MAIN
+#endif
 #include "yaffut.h"
 
 #include <time.h>

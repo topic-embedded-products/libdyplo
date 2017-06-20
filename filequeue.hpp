@@ -63,7 +63,9 @@ namespace dyplo
 	class FilePollScheduler
 	{
 		protected:
+#ifndef __rtems__
 			Pipe m_internal_pipe;
+#endif
 			bool m_interrupted;
 		public:
 			FilePollScheduler();
@@ -102,7 +104,11 @@ namespace dyplo
 			int result = ::write(m_file_handle, m_writeout_position, m_bytes_to_write);
 			if (result < 0)
 			{
+#ifdef __rtems__
+				if (errno == ENODEV)
+#else
 				if (errno == EAGAIN)
+#endif
 					return true;
 				else
 					throw std::runtime_error("Failed to write to file");
@@ -132,7 +138,9 @@ namespace dyplo
 					return 0;
 			}
 			while (write_buffer())
+			{
 				m_scheduler.wait_writeable(m_file_handle);
+			}
 			buffer = m_buff;
 			return m_capacity;
 		}
@@ -147,7 +155,9 @@ namespace dyplo
 			if (synchronous)
 			{
 				while (write_buffer())
+				{
 					m_scheduler.wait_writeable(m_file_handle);
+				}
 			}
 			else
 			{
@@ -206,7 +216,9 @@ namespace dyplo
 			if (m_carry)
 			{
 				if (m_carry >= count_min)
+				{
 					return m_carry;
+				}
 				buffer_position = (char*)(m_buff + m_carry);
 				count_min -= m_carry;
 			}
@@ -222,7 +234,11 @@ namespace dyplo
 				int result = ::read(m_file_handle, buffer_position, buffer_space_available);
 				if (result < 0)
 				{
+#ifdef __rtems__
+					if (errno == ENODEV)
+#else
 					if (errno == EAGAIN)
+#endif
 					{
 						if (count_min == 0)
 						{ /* Non blocking requested, return what we have */

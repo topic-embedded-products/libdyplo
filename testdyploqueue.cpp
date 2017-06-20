@@ -194,6 +194,8 @@ TEST(a_fixed_memory_queue, with_custom_class)
 	YAFFUT_EQUAL(0, Storage::instances_alive_count);
 }
 
+#ifndef __rtems__
+
 struct a_file_queue {};
 TEST(a_file_queue, blocking)
 {
@@ -336,8 +338,6 @@ TEST(a_file_queue, interrupt_resume)
 	YAFFUT_CHECK(count > 0);
 }
 
-struct file_scheduler {};
-
 TEST(a_file_queue, write_flush_all)
 {
 	const unsigned int write_buffer_count = 4096;
@@ -438,3 +438,4 @@ TEST(a_file_queue, read_carry_only)
 	}
 	input.end_read(count);
 }
+#endif

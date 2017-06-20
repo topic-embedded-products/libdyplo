@@ -27,7 +27,9 @@
  * paper mail at the following address: Postbus 440, 5680 AK Best, The Netherlands.
  */
 
+#ifndef __rtems__
 #define YAFFUT_MAIN
+#endif
 #include "yaffut.h"
 
 #include "hardware.hpp"
