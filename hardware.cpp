@@ -109,6 +109,21 @@ namespace dyplo
 		throw IOException(ENODEV);
 	}
 
+	int HardwareContext::openAvailableDMAne(int access) throw()
+	{
+		const int MAX_DMA_NODES = 4;
+		for (int index = 0; index < MAX_DMA_NODES; ++index)
+		{
+			int result = openDMA(index, access);
+			if (result != -1)
+				return result;
+			if (errno != EBUSY)
+				return -1;
+		}
+		errno = ENODEV;
+		return -1;
+	}
+
 	static int count_numbered_files(const char* pattern)
 	{
 		int result = 0;
@@ -1039,33 +1054,22 @@ namespace dyplo
 		int icap = control.getIcapNodeIndex();
 		if (icap >= 0)
 		{
-			// try using the DMA node to set up the route
-			try
+			// try using a DMA node first
+			int fifo_fd = context.openAvailableDMAne(O_RDWR);
+			if (fifo_fd != -1)
 			{
-				dma_writer = new HardwareDMAFifo(context.openAvailableDMA(O_RDWR));
-			}
-			catch (const std::exception&)
-			{
-				// DMA failed, continue by trying the CPU node
-				try
-				{
-					cpu_fifo = new HardwareFifo(context.openAvailableWriteFifo());
-				}
-				catch (const std::exception&)
-				{
-					throw IOException("No available CPU or DMA nodes to program ICAP");
-				}
-			}
-
-			// set routes
-			if (dma_writer != NULL)
-			{
+				dma_writer = new HardwareDMAFifo(fifo_fd);
 				dma_writer->reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT,
 					programmer_blocksize, programmer_numblocks, false);
 				dma_writer->addRouteTo(icap);
-			} 
-			else if (cpu_fifo != NULL)
+			}
+			else
 			{
+				// DMA failed, use CPU node as fallback
+				fifo_fd = context.openAvailableWriteFifo();
+				if (fifo_fd == -1)
+					throw IOException("No available CPU or DMA nodes to program ICAP");
+				cpu_fifo = new HardwareFifo(fifo_fd);
 				cpu_fifo->addRouteTo(icap);
 			}
 		}

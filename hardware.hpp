@@ -48,6 +48,7 @@ namespace dyplo
 		int openControl(int access);
 		int openDMA(int index, int access);
 		int openAvailableDMA(int access);
+		int openAvailableDMAne(int access) throw();
 		int openAvailableWriteFifo();
 		int openAvailableReadFifo();
 
