@@ -58,6 +58,11 @@ namespace dyplo
 		unsigned int getAvailablePartitions(const char* function);
 		static unsigned int getAvailablePartitionsIn(const char* path);
 
+		// Programs a partial bitstream given the function into the specified node. The node is automatically 
+		// disabled before programming and is enabled afterwards depending in the enableAfterProgram flag.
+		// Function returns the numbers of bytes programmed into the node.
+		unsigned int programPartial(const char* function, int node_id, bool enableAfterProgram);
+
 		// returns path of partial bitstream if found. Empty string otherwise.
 		std::string findPartition(const char* function, int node_id);
 		static std::string findPartitionIn(const char* path, int node_id);
@@ -123,6 +128,8 @@ namespace dyplo
 		void resetReadFifos(unsigned int mask);
 		static void resetWriteFifos(int file_descriptor, unsigned int mask);
 		static void resetReadFifos(int file_descriptor, unsigned int mask);
+		void resetNode();
+		static void resetNode(int file_descriptor);
 		bool isNodeEnabled();
 		void enableNode();
 		void disableNode();

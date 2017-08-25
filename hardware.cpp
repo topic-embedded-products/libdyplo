@@ -291,6 +291,40 @@ namespace dyplo
 		return getAvailablePartitionsIn(path.c_str());
 	}
 
+	unsigned int HardwareContext::programPartial(const char* function, int node_id, bool enableAfterProgram)
+	{
+		unsigned int num_bytes_programmed = 0;
+		dyplo::HardwareControl hwControl(*this);
+      
+		// Find data_producer node
+		std::string bitstream = findPartition(function, node_id);
+		if (bitstream.empty())
+		{
+			throw dyplo::IOException("Bitstream not found");
+		}
+      
+		// Open the node and disconnect it from the backplane
+		dyplo::HardwareConfig cfg(openConfig(node_id, O_RDONLY));
+		cfg.disableNode();
+
+		// Program partial bitstream
+		{
+			dyplo::HardwareProgrammer programmer(*this, hwControl);
+			num_bytes_programmed = programmer.fromFile(bitstream.c_str());
+		}
+
+		// Reset the node
+		cfg.resetNode();
+
+		if (enableAfterProgram)
+		{
+			// Reconnect to backplane
+			cfg.enableNode();
+		}
+
+		return num_bytes_programmed;
+	}
+
 	std::string HardwareContext::findPartitionIn(const char* path, int node_id)
 	{
 		DirectoryListing dir(path);
@@ -483,7 +517,6 @@ namespace dyplo
 		return result;
 	}
 
-
 	void HardwareConfig::resetWriteFifos(int file_descriptor, unsigned int mask)
 	{
 		int result = ::ioctl(file_descriptor, DYPLO_IOCRESET_FIFO_WRITE, mask);
@@ -493,9 +526,7 @@ namespace dyplo
 
 	void HardwareConfig::resetWriteFifos(unsigned int mask)
 	{
-		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_WRITE, mask);
-		if (result < 0)
-			throw IOException(__func__);
+		resetWriteFifos(handle, mask);
 	}
 
 	void HardwareConfig::resetReadFifos(int file_descriptor, unsigned int mask)
@@ -507,9 +538,18 @@ namespace dyplo
 
 	void HardwareConfig::resetReadFifos(unsigned int mask)
 	{
-		int result = ::ioctl(handle, DYPLO_IOCRESET_FIFO_READ, mask);
-		if (result < 0)
-			throw IOException(__func__);
+		resetReadFifos(handle, mask);
+	}
+
+	void HardwareConfig::resetNode()
+	{
+		resetNode(handle);
+	}
+
+	void HardwareConfig::resetNode(int file_descriptor)
+	{
+		// A (PR or fixed) node is resetted by resetting the write fifos
+		resetWriteFifos(file_descriptor, 0 /* mask is not relevant */);
 	}
 
 	bool HardwareConfig::isNodeEnabled()
