@@ -993,9 +993,8 @@ namespace dyplo
 				}
 			}
             
-#if (BYTE_ORDER == LITTLE_ENDIAN)
 			swap_buffer_aligned((unsigned int*)buffer_start, total_bytes >> 2);
-#endif
+
 			bytes = callback.processData(buffer_start, total_bytes);
 			if (bytes < 0)
 			{
@@ -1019,9 +1018,8 @@ namespace dyplo
 					throw TruncatedFileException();
 				}
                 
-#if (BYTE_ORDER == LITTLE_ENDIAN)
 				swap_buffer_aligned((unsigned int*)buffer_start, bytes >> 2);
-#endif
+
 				bytes = callback.processData(buffer_start, to_read);
 				if (bytes < 0)
 				{
@@ -1060,9 +1058,6 @@ namespace dyplo
 
 			do
 			{
-#if (BYTE_ORDER == BIG_ENDIAN)
-				swap_buffer_aligned((unsigned int*)buffer_start, bytes>>2);
-#endif
 				ssize_t bytes_written = callback.processData(buffer_start, bytes);
 				if (bytes_written < bytes)
 				{
