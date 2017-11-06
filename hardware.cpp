@@ -436,6 +436,26 @@ namespace dyplo
 		if (::ioctl(handle, DYPLO_IOCTROUTE_DELETE, arg) != 0)
 			throw IOException(__func__);
 	}
+   
+   unsigned int HardwareControl::b2nCounterGet(unsigned int node_id)
+	{
+      struct dyplo_backplane_counter_t counter;
+      counter.node_id = node_id;
+		int result = ::ioctl(handle, DYPLO_IOCGB2NCOUNTER, &counter);
+      if (result < 0)
+         throw IOException();
+      return counter.counter;
+	}
+   
+   unsigned int HardwareControl::n2bCounterGet(unsigned int node_id)
+	{
+      struct dyplo_backplane_counter_t counter;
+      counter.node_id = node_id;
+		int result = ::ioctl(handle, DYPLO_IOCGN2BCOUNTER, &counter);
+      if (result < 0)
+         throw IOException();
+      return counter.counter;
+	}  
 
 	unsigned int HardwareControl::program(const char* filename)
 	{

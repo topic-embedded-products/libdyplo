@@ -95,6 +95,9 @@ namespace dyplo
 		void routeAdd(const Route* items, int n_items);
 		// deletes all routes to the given destination node
 		void routeDelete(char dstNode);
+      
+		unsigned int b2nCounterGet(unsigned int node_id);
+		unsigned int n2bCounterGet(unsigned int node_id);
 
 		// Will attempt to program via ICAP interface:
 		unsigned int program(File &input);

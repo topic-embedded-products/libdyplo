@@ -53,6 +53,11 @@ typedef struct dyplo_route_t  {
 	struct dyplo_route_item_t* proutes;
 } dyplo_route_t;
 
+typedef struct dyplo_backplane_counter_t  {
+	unsigned int node_id;  
+	unsigned int counter;
+} dyplo_backplane_counter_t;
+
 typedef struct dyplo_buffer_block_alloc_req {
 	__u32 size;	/* Size of each buffer (will be page aligned) */
 	__u32 count;	/* Number of buffers */
@@ -146,6 +151,9 @@ typedef struct dyplo_dma_configuration_req {
 #define DYPLO_IOC_WAIT_FOR_INCOMING_DATA 0x42
 #define DYPLO_IOC_WAIT_FOR_OUTGOING_DATA 0x43
 
+#define DYPLO_IOC_BACKPLANE_B2N_COUNTER_GET 0x50
+#define DYPLO_IOC_BACKPLANE_N2B_COUNTER_GET 0x51
+
 /* S means "Set" through a ptr,
  * T means "Tell", sets directly
  * G means "Get" through a ptr
@@ -161,6 +169,10 @@ typedef struct dyplo_dma_configuration_req {
 #define DYPLO_IOCTROUTE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_TELL)
 /* Remove routes to a node. Argument is a integer node number. */
 #define DYPLO_IOCTROUTE_DELETE   _IO(DYPLO_IOC_MAGIC, DYPLO_IOC_ROUTE_DELETE)
+/* Get the B2N (backplane to node) counter value of a specific node. */
+#define DYPLO_IOCGB2NCOUNTER   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_BACKPLANE_B2N_COUNTER_GET, struct dyplo_backplane_counter_t)
+/* Get the N2B (node to backplane) counter value of a specific node. */
+#define DYPLO_IOCGN2BCOUNTER   _IOR(DYPLO_IOC_MAGIC, DYPLO_IOC_BACKPLANE_N2B_COUNTER_GET, struct dyplo_backplane_counter_t)
 
 /* Add a route from "this" dma or cpu node to another node. The argument
  * is an integer of destination node | fifo << 8 */
