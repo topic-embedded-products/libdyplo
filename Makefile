@@ -47,7 +47,15 @@ CFLAGS   +=
 CLEAN_ADDITIONS += 
 CLOBBER_ADDITIONS +=
 
-all:	${ARCH} $(SRCS) $(LIB)
+all:	$(SRCS) $(LIB)
+
+# $(ARCH) creates the output path for object files
+$(OBJS): $(ARCH)/.dirstamp
+# Create the output path. Use a "stamp" file because the directory
+# date/time stamp changes when a file is added or removed there.
+$(ARCH)/.dirstamp:
+	test -d $(ARCH) || mkdir -p $(ARCH)
+	touch $@
 
 $(LIB): ${OBJS}
 	$(make-library)
