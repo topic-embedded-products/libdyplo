@@ -324,6 +324,11 @@ TEST(hardware_driver_ctx, d_io_control_route_directly_fifo)
 
 TEST(hardware_driver_ctx, d_io_control_route_directly_dma)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	/* Using ioctl on device to directly create routes to/from it */
 	dyplo::HardwareControl::Route routes[64];
 	dyplo::HardwareControl ctrl(context);
@@ -1200,7 +1205,11 @@ TEST(hardware_driver_hdl, l_hdl_block_zig_zag)
 TEST(hardware_driver_hdl, l_hdl_block_maze_route_dma)
 {
 	static const int dma_node_count = get_dyplo_dma_node_count();
-	CHECK(dma_node_count >= 1);
+	if (!dma_node_count)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 
 	static const int hdl_configuration_blob[] = {
 		1234, -1243, 1000001, 10001
@@ -1294,6 +1303,7 @@ TEST(hardware_driver_hdl, l_hdl_block_maze_route_dma)
 }
 #endif
 
+#ifndef __rtems__
 static const int how_many_blocks = 1024;
 
 static void* thread_send_many_blocks(void* arg)
@@ -1323,7 +1333,6 @@ static void* thread_send_many_blocks(void* arg)
 	}
 	return NULL;
 }
-
 
 TEST(hardware_driver_hdl, m_hdl_audio_style)
 {
@@ -1408,10 +1417,16 @@ TEST(hardware_driver_hdl, m_hdl_audio_style)
 	}
 	check_all_input_fifos_are_empty();
 }
+#endif
 
 TEST(hardware_driver_ctx, n_dma_cpu_transfer)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
 		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
@@ -1453,6 +1468,11 @@ TEST(hardware_driver_ctx, n_dma_cpu_transfer)
 TEST(hardware_driver_ctx, o_cpu_dma_transfer)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
 		dyplo::HardwareFifo dma0r(context.openDMA(dma_index, O_RDONLY));
@@ -1503,6 +1523,11 @@ TEST(hardware_driver_ctx, o_cpu_dma_transfer)
 TEST(hardware_driver_ctx, p_dma_crossbar)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	for (int dma_index_w = 0; dma_index_w < number_of_dma_nodes; ++dma_index_w)
 	{
 		dyplo::HardwareFifo dma0w(context.openDMA(dma_index_w, O_WRONLY));
@@ -1578,6 +1603,11 @@ TEST(hardware_driver_ctx, p_dma_crossbar)
 TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
 		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
@@ -1661,6 +1691,11 @@ TEST(hardware_driver_ctx, p_dma_nonblocking_io)
 TEST(hardware_driver_ctx, p_dma_reset)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
 		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
@@ -1719,6 +1754,11 @@ TEST(hardware_driver_ctx, p_dma_reset)
 TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 
 	for (unsigned int transfer_mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
 		transfer_mode <= dyplo::HardwareDMAFifo::MODE_STREAMING;
@@ -1842,6 +1882,11 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_1transfer)
 TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	for (int dma_index = 0; dma_index < number_of_dma_nodes; ++dma_index)
 	{
 		static const unsigned int blocksize = 1024 * 1024;
@@ -1919,6 +1964,11 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 
 TEST(hardware_driver_ctx, p_dma_zerocopy_3usersignals)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int dma_index = 0;
 	static const unsigned int blocksize = 4 * 1024;
 	static const unsigned int num_blocks = 4;
@@ -1992,6 +2042,11 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_3usersignals)
 TEST(hardware_driver_ctx, p_dma_zerocopy_4from_regular_dma)
 {
 	int number_of_dma_nodes = get_dyplo_dma_node_count();
+	if (!number_of_dma_nodes)
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int dma_index = number_of_dma_nodes / 2;
 	static const unsigned int transfer_mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
 	/* blocksize that is 8-byte aligned but not page aligned */
@@ -2065,6 +2120,11 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_4from_regular_dma)
 
 TEST(hardware_driver_ctx, q_dma_invalid_configuration)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int dma_index = 0;
 	{
 		dyplo::HardwareDMAFifo dma0(context.openDMA(dma_index, O_RDONLY));
@@ -2083,6 +2143,11 @@ TEST(hardware_driver_ctx, q_dma_invalid_configuration)
 
 TEST(hardware_driver_ctx, q_dma_open_only_once)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int dma_index = 0;
 	dyplo::File dma0r1(context.openDMA(dma_index, O_RDONLY));
 	/* Cannot open twice for reading */
@@ -2102,6 +2167,11 @@ TEST(hardware_driver_ctx, q_dma_open_only_once)
 
 TEST(hardware_driver_ctx, q_dma_standalone_busy)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int dma_index = 0;
 	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
 #ifdef __rtems__
@@ -2124,6 +2194,11 @@ std::ostream& operator<<(std::ostream& os, const dyplo::HardwareDMAFifo::Standal
 
 TEST(hardware_driver_ctx, q_dma_standalone_config_readback)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int dma_index = 0;
 	static const unsigned int blocksize = 64 * 1024;
 	static const unsigned int num_blocks = 2;
@@ -2155,6 +2230,11 @@ TEST(hardware_driver_ctx, q_dma_standalone_config_readback)
 
 TEST(hardware_driver_ctx, q_dma_standalone_pass)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 #ifdef __rtems__
 	static const int standalone_dma_index = 1; // RTEMS test bitstream configuration
 #else
@@ -2269,6 +2349,11 @@ static void standalone_transform(char* dst, const char* src,
 
 TEST(hardware_driver_ctx, q_dma_standalone_rearrange_2D)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	static const int standalone_dma_index = 1;
 	static const unsigned int blocksize = 64 * 1024;
 	static const unsigned int blocksize_words = blocksize / sizeof(unsigned int);
@@ -2383,6 +2468,11 @@ TEST(hardware_driver_ctx, q_fifo_usersignal)
 
 TEST(hardware_driver_ctx, q_dma_usersignal)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	dyplo::HardwareDMAFifo fifo1(context.openDMA(0, O_RDONLY));
 	fifo1.reconfigure(dyplo::HardwareDMAFifo::MODE_RINGBUFFER, 1, 1, true);
 	//dyplo::HardwareFifo fifo2(context.openDMA(0, O_WRONLY|O_APPEND));
@@ -2488,12 +2578,14 @@ void programIcapAndVerify(dyplo::HardwareContext& context)
 			}
 		}
 	}
+
 	dyplo::HardwareFifo to_adder = context.openFifo(1, O_WRONLY);
 	dyplo::HardwareFifo from_adder = context.openFifo(1, O_RDONLY);
 	for (std::vector<unsigned char>::const_iterator it = pr_nodes.begin();
 		it != pr_nodes.end(); ++it)
 	{
 		dyplo::HardwareConfig adder = context.openConfig(*it, O_RDWR);
+		adder.resetNode();
 		adder.enableNode();
 		/* Test that the partial really is an adder now */
 		static const int hdl_configuration_blob[] = {
@@ -2517,6 +2609,11 @@ void programIcapAndVerify(dyplo::HardwareContext& context)
 
 TEST(hardware_driver_ctx, a_program_icap_via_dma)
 {
+	if (!get_dyplo_dma_node_count())
+	{
+		std::cout << " (no DMA)";
+		return;
+	}
 	// will try to program via DMA to ICAP
 	programIcapAndVerify(context);
 }
