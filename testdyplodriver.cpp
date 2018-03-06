@@ -2588,9 +2588,16 @@ void programIcapAndVerify(dyplo::HardwareContext& context)
 		adder.resetNode();
 		adder.enableNode();
 		/* Test that the partial really is an adder now */
+#ifdef __rtems__
+		/* single adder in RTEMS systems */
+		static const int hdl_configuration_blob[] = {
+			1234
+		};
+#else
 		static const int hdl_configuration_blob[] = {
 			1234, -1243, 1000001, 10001
 		};
+#endif
 		adder.write(hdl_configuration_blob, sizeof(hdl_configuration_blob));
 		int data[] = {42 ,0};
 		int result[2];
