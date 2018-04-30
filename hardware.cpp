@@ -329,6 +329,14 @@ namespace dyplo
 			throw IOException(__func__);
 	}
 
+	void HardwareControl::routeDeleteSingle(unsigned char srcNode, unsigned char srcFifo, unsigned char dstNode, unsigned char dstFifo)
+	{
+		struct dyplo_route_item_t route =
+			{dstFifo, dstNode, srcFifo, srcNode};
+		if (::ioctl(handle, DYPLO_IOCTROUTE_SINGLE_DELETE, route) != 0)
+			throw IOException(__func__);
+	}
+
 	int HardwareControl::routeGetAll(Route* items, int n_items)
 	{
 		struct dyplo_route_t routes;

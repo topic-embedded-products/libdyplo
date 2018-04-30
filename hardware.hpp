@@ -83,6 +83,7 @@ namespace dyplo
 		int routeGetAll(Route* items, int n_items);
 		void routeAdd(const Route* items, int n_items);
 		void routeDelete(char node);
+		void routeDeleteSingle(unsigned char srcNode, unsigned char srcFifo, unsigned char dstNode, unsigned char dstFifo);
 
 		// Will attempt to program via ICAP interface:
 		unsigned int program(File &input);
