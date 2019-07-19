@@ -402,6 +402,15 @@ namespace dyplo
 			throw IOException(__func__);
 	}
 
+	unsigned long long HardwareControl::readDyploLicense()
+	{
+		unsigned long long license_blob;
+		int result = ::ioctl(handle, DYPLO_IOCGLICENSE_KEY, &license_blob);
+		if (result < 0)
+			throw IOException(__func__);
+		return license_blob;
+	}
+
 	void HardwareControl::writeDyploLicenseFile(const char* path_to_dyplo_license_file)
 	{
 		unsigned long long hash;
