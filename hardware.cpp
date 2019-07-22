@@ -411,6 +411,24 @@ namespace dyplo
 		return license_blob;
 	}
 
+	unsigned long long HardwareControl::readDyploDeviceID()
+	{
+		unsigned long long license_blob;
+		int result = ::ioctl(handle, DYPLO_IOCGDEVICE_ID, &license_blob);
+		if (result < 0)
+			throw IOException(__func__);
+		return license_blob;
+	}
+
+	unsigned int HardwareControl::readDyploLicenseInfo()
+	{
+		int result = ::ioctl(handle, DYPLO_IOCQLICENSE_INFO);
+		if (result < 0)
+			throw IOException();
+		return (unsigned int)result;
+	}
+
+
 	void HardwareControl::writeDyploLicenseFile(const char* path_to_dyplo_license_file)
 	{
 		unsigned long long hash;

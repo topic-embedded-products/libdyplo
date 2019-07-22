@@ -94,6 +94,8 @@ namespace dyplo
 		void disableNodes(unsigned int mask);
 		void writeDyploLicense(unsigned long long license_blob);
 		unsigned long long readDyploLicense();
+		unsigned long long readDyploDeviceID();
+		unsigned int readDyploLicenseInfo();
 		void writeDyploLicenseFile(const char* path_to_dyplo_license_file);
 		unsigned short readDyploStaticID();
 
