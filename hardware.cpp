@@ -637,10 +637,6 @@ namespace dyplo
 		{
 			switch (mode)
 			{
-				case MODE_STANDALONE:
-					/* In standalone mode, it creates one big block of size*count bytes. */
-					/* We don't need to mmap it because it's for the FPGA only. */
-					break;
 				case MODE_RINGBUFFER:
 					/* This mode does not support memory mapping yet */
 					break;
@@ -743,36 +739,6 @@ namespace dyplo
 			}
 		}
 	}
-
-	void HardwareDMAFifo::standaloneStart(bool direction_from_logic)
-	{
-		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCDMASTANDALONE_START_FROM_LOGIC : DYPLO_IOCDMASTANDALONE_START_TO_LOGIC))
-			throw IOException(__func__);
-	}
-	void HardwareDMAFifo::standaloneStop(bool direction_from_logic)
-	{
-		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCDMASTANDALONE_STOP_FROM_LOGIC : DYPLO_IOCDMASTANDALONE_STOP_TO_LOGIC))
-			throw IOException(__func__);
-	}
-	void HardwareDMAFifo::setStandaloneConfig(
-		const  HardwareDMAFifo::StandaloneConfiguration *config, bool direction_from_logic)
-	{
-		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCSDMASTANDALONE_CONFIGURE_FROM_LOGIC : DYPLO_IOCSDMASTANDALONE_CONFIGURE_TO_LOGIC, config))
-			throw IOException(__func__);
-	}
-
-	void HardwareDMAFifo::getStandaloneConfig(
-		HardwareDMAFifo::StandaloneConfiguration *config, bool direction_from_logic)
-	{
-		if(::ioctl(handle, direction_from_logic ? DYPLO_IOCGDMASTANDALONE_CONFIGURE_FROM_LOGIC : DYPLO_IOCGDMASTANDALONE_CONFIGURE_TO_LOGIC, config))
-			throw IOException(__func__);
-	}
-
-	bool operator==(const dyplo::HardwareDMAFifo::StandaloneConfiguration& lhs, const dyplo::HardwareDMAFifo::StandaloneConfiguration& rhs)
-	{
-		return !memcmp(&lhs, &rhs, sizeof(lhs));
-	}
-
 
 	FpgaImageFileWriter::FpgaImageFileWriter(File& output):
 		output_file(output),
