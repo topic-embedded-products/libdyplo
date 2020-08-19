@@ -86,13 +86,20 @@ struct hardware_driver_ctx
 static const unsigned int benchmark_block_sizes[] = {
 	4096, 8192, 16384, 32*1024, 64*1024, 128*1024, 256*1024, 1024*1024,
 };
+
+static const char *MODE_NAME[] = {
+	"",
+	"RINGBUFFER",
+	"  COHERENT",
+	" STREAMING",
+};
 TEST(hardware_driver_ctx, dma_zerocopy_benchmark)
 {
 	static const int dma_index = 0;
 	for (unsigned int mode = dyplo::HardwareDMAFifo::MODE_COHERENT;
 		mode <= dyplo::HardwareDMAFifo::MODE_STREAMING; ++mode)
 	{
-		std::cout << "\nm:" << mode;
+		std::cout << "\n" << MODE_NAME[mode];
 	for (unsigned int blocksize_index = 0;
 		blocksize_index < sizeof(benchmark_block_sizes)/sizeof(benchmark_block_sizes[0]);
 		++blocksize_index)
@@ -160,6 +167,62 @@ TEST(hardware_driver_ctx, dma_zerocopy_benchmark)
 		timer.stop();
 		std::cout << (total_received/timer.elapsed_us()) << std::flush;
 	}
+	}
+	std::cout << " (MB/s) ";
+}
+
+TEST(hardware_driver_ctx, dma_bounce_benchmark)
+{
+	static const unsigned int max_blocksize_index = 5; /* don't go over 64k */
+	static const unsigned int num_blocks = 4;
+	static const int dma_index = 0;
+	std::vector<char> write_buffer(
+				benchmark_block_sizes[max_blocksize_index - 1]);
+	std::vector<char> read_buffer(
+				benchmark_block_sizes[max_blocksize_index - 1]);
+	std::cout << "\n" << MODE_NAME[1]; /* ringbuffer */
+	for (unsigned int blocksize_index = 0;
+		blocksize_index < max_blocksize_index;
+		++blocksize_index)
+	{
+		unsigned int blocksize = benchmark_block_sizes[blocksize_index];
+		std::cout << ' ' << (blocksize>>10) << "k:";
+		dyplo::HardwareFifo dma0r(context.openDMA(dma_index, O_RDONLY));
+		dma0r.reset();
+		dma0r.setDataTreshold(blocksize);
+		dyplo::HardwareFifo dma0w(context.openDMA(dma_index, O_WRONLY));
+		dma0w.reset();
+		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
+
+		/* Touch all memory to bring it into cache */
+		memset(&read_buffer[0], 0xDEADBEEF, blocksize);
+		unsigned int* data = (unsigned int*)&write_buffer[0];
+		for (unsigned int j = 0; j < blocksize/sizeof(unsigned int); ++j)
+			data[j] = j;
+		unsigned int total_received = 0;
+		Stopwatch timer;
+		timer.start();
+		/* Send data */
+		for (unsigned int i = 0 ; i < num_blocks; ++i) {
+			size_t bytes = dma0w.write(&write_buffer[0], blocksize);
+			EQUAL(blocksize, bytes);
+		}
+		for (unsigned int i = (16*1024*1024)/blocksize; i != 0; --i)
+		{
+			ssize_t bytes = dma0r.read(&read_buffer[0], blocksize);
+			EQUAL(blocksize, bytes);
+			total_received += bytes;
+			bytes = dma0w.write(&write_buffer[0], blocksize);
+			EQUAL(blocksize, bytes);
+		}
+		for (unsigned int i = 0 ; i < num_blocks; ++i)
+		{
+			ssize_t bytes = dma0r.read(&read_buffer[0], blocksize);
+			EQUAL(blocksize, bytes);
+			total_received += bytes;
+		}
+		timer.stop();
+		std::cout << (total_received/timer.elapsed_us()) << std::flush;
 	}
 	std::cout << " (MB/s) ";
 }
