@@ -609,7 +609,7 @@ void hardware_driver_poll_single(int fifo)
 
 	CHECK(! fifo_in.poll_for_incoming_data(0) ); /* is empty */
 
-	EQUAL(0, dyplo::set_non_blocking(fifo_in.handle));
+	fifo_in.fcntl_set_flag(O_NONBLOCK);
 	/* Read from empty fifo, must not block but return EAGAIN error */
 	ASSERT_THROW(fifo_in.read(&data, sizeof(data)), dyplo::IOException);
 
@@ -617,7 +617,7 @@ void hardware_driver_poll_single(int fifo)
 	CHECK(fifo_out.poll_for_outgoing_data(0));
 
 	/* Set output fifo in non-blocking mode */
-	EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
+	fifo_out.fcntl_set_flag(O_NONBLOCK);
 
 	/* Write until we can't write no more for 2ms */
 	ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, 2000);
@@ -733,7 +733,7 @@ static void check_if_input_fifo_is_empty_impl(std::ostringstream& msg, int fifo)
 	{
 		msg << "Input fifo " << fifo << " is not empty:";
 		msg << std::hex;
-		dyplo::set_non_blocking(fifo_in.handle);
+		fifo_in.fcntl_set_flag(O_NONBLOCK);
 		int count = 0;
 		while (fifo_in.poll_for_incoming_data(0))
 		{
@@ -822,7 +822,7 @@ void hardware_driver_irq_driven_write_single(int fifo)
 		/* Make it so that the pipe is filled to the brim */
 		dyplo::HardwareFifo fifo_out(openFifo(fifo, O_WRONLY|O_APPEND));
 		fifo_out.addRouteTo(fifo_in.getNodeAndFifoIndex());
-		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
+		fifo_out.fcntl_set_flag(O_NONBLOCK);
 		CHECK(fifo_out.poll_for_outgoing_data(0)); /* Must have room */
 		/* Fill it until it is full */
 		total_written = fill_fifo_to_the_brim(fifo_out);
@@ -992,7 +992,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 		File fifo_out(ctrl.openFifo(from_cpu_fifo, O_WRONLY|O_APPEND));
 		const int signature = 0x1000000;
 		/* Set output fifo in non-blocking mode */
-		EQUAL(0, dyplo::set_non_blocking(fifo_out.handle));
+		fifo_out.fcntl_set_flag(O_NONBLOCK);
 		ssize_t total_written = fill_fifo_to_the_brim(fifo_out, signature, 2000);
 		CHECK(total_written > 0);
 		CHECK(total_written > 1600); /* At least some queues must fill up */
@@ -1007,7 +1007,7 @@ static void run_hdl_test(dyplo::HardwareContext &ctrl, int from_cpu_fifo, int to
 		}
 		File fifo_in(ctrl.openFifo(to_cpu_fifo, O_RDONLY));
 		CHECK(fifo_in.poll_for_incoming_data(1) ); /*  has data */
-		EQUAL(0, dyplo::set_non_blocking(fifo_in.handle));
+		fifo_in.fcntl_set_flag(O_NONBLOCK);
 		const size_t blocksize = 1024*sizeof(int);
 		int* buffer = new int[blocksize/sizeof(int)];
 		ssize_t total_read = 0;
@@ -1789,12 +1789,12 @@ TEST(hardware_driver_ctx, p_dma_zerocopy_2poll)
 		dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR));
 		dma0w.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, false);
 		EQUAL(num_blocks, dma0w.count());
-		EQUAL(0, dyplo::set_non_blocking(dma0w));
+		dma0w.fcntl_set_flag(O_NONBLOCK);
 		/* Now for the receiving part */
 		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
 		dma0r.reconfigure(dyplo::HardwareDMAFifo::MODE_COHERENT, blocksize, num_blocks, true);
 		EQUAL(num_blocks, dma0r.count());
-		EQUAL(0, dyplo::set_non_blocking(dma0r));
+		dma0r.fcntl_set_flag(O_NONBLOCK);
 		dma0r.addRouteFrom(dma0w.getNodeAndFifoIndex());
 		/* Prime the reader */
 		for (unsigned int i = 0; i < num_blocks; ++i)

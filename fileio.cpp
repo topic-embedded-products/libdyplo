@@ -29,9 +29,61 @@
 #include "fileio.hpp"
 #include "exceptions.hpp"
 #include <errno.h>
+#include <string.h>
 
 namespace dyplo
 {
+	const char* EndOfFileException::what() const throw()
+	{
+		return "End of file";
+	}
+	const char* EndOfInputException::what() const throw()
+	{
+		return "End of input file";
+	}
+	const char* EndOfOutputException::what() const throw()
+	{
+		return "End of output file";
+	}
+
+	IOException::IOException():
+		m_errno(errno)
+	{
+	}
+	IOException::IOException(const char* extra_context):
+		m_errno(errno),
+		context(extra_context)
+	{
+	}
+	IOException::IOException(int code):
+		m_errno(code)
+	{
+	}
+	IOException::IOException(const char* extra_context, int code):
+		m_errno(code),
+		context(extra_context)
+	{
+	}
+
+	const char* IOException::what() const throw()
+	{
+		if (context.empty())
+			return strerror(m_errno);
+		if (buffer.empty())
+		{
+			buffer = strerror(m_errno);
+			buffer += " context: ";
+			buffer += context;
+		}
+		return buffer.c_str();
+	}
+
+	int set_non_blocking(int file_handle)
+	{
+		int flags = fcntl(file_handle, F_GETFL, 0);
+		return fcntl(file_handle, F_SETFL, flags | O_NONBLOCK);
+	}
+
 	File::File(const char* filename, int access):
 		handle(::open(filename, access))
 	{

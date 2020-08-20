@@ -35,13 +35,12 @@
 #include <string.h>
 #include "generics.hpp"
 #include "exceptions.hpp"
+#include "fileio.hpp"
 #include "scopedlock.hpp"
 #include "noopscheduler.hpp"
 
 namespace dyplo
 {
-	int set_non_blocking(int file_handle);
-
 	struct Pipe
 	{
 		int m_handles[2];

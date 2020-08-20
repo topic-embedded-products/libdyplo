@@ -35,6 +35,8 @@
 
 namespace dyplo
 {
+	int set_non_blocking(int file_handle);
+
 	/* Wrapper around generic OS files */
 	class File
 	{
