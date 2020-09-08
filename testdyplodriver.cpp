@@ -2017,13 +2017,6 @@ TEST(hardware_driver_ctx, q_dma_open_only_once)
 	CHECK(dma0r1.handle != -1); /* Force lifetime of dma0r1 object */
 }
 
-TEST(hardware_driver_ctx, q_dma_standalone_busy)
-{
-	static const int dma_index = 0;
-	dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
-	ASSERT_THROW(dyplo::HardwareDMAFifo dma0w(context.openDMA(dma_index, O_RDWR|O_DIRECT)), dyplo::IOException);
-}
-
 TEST(hardware_driver_ctx, q_fifo_usersignal)
 {
 	dyplo::HardwareFifo fifo1(context.openFifo(1, O_RDONLY));
