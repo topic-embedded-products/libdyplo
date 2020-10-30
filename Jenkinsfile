@@ -25,5 +25,12 @@ pipeline {
                 sh 'make check'
             }
         }
+
+        stage('Push github') {
+              when { branch 'master' } // Only run this step on the master branch
+              steps {
+                sh 'git push git@github.com:topic-embedded-products/libdyplo.git HEAD:refs/heads/master'
+            }
+        }
     }
 }
