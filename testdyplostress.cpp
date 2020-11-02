@@ -33,6 +33,7 @@
 #include "hardware.hpp"
 #include <errno.h>
 #include <vector>
+#include <sstream>
 
 using dyplo::IOException;
 using dyplo::File;
@@ -117,8 +118,22 @@ struct Stress
 		context(),
 		control(context)
 	{
+		const char* fixednodes = ::getenv("DYPLO_FIXED_TESTNODES");
+		if (fixednodes)
+		{
+			std::istringstream ss(fixednodes);
+			while (!ss.eof())
+			{
+				int id;
+				ss >> id;
+				int handle = context.openConfig(id, O_RDWR);
+				if (handle != -1)
+					nodes.push_back(new StressNode(id, handle));
+			}
+		}
+
 		unsigned int candidates = context.getAvailablePartitions(function_name);
-		if (candidates == 0)
+		if ((candidates == 0) && nodes.empty())
 			FAIL("No testNode available");
 		control.disableNodes(candidates);
 		{
