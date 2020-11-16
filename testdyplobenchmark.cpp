@@ -84,7 +84,7 @@ struct hardware_driver_ctx
 };
 
 static const unsigned int benchmark_block_sizes[] = {
-	4096, 8192, 16384, 32*1024, 64*1024, 128*1024, 256*1024, 1024*1024,
+	4096, 8192, 16384, 32*1024, 64*1024, 128*1024, 256*1024, 1024*1024, 4096*1024,
 };
 
 static const char *MODE_NAME[] = {
@@ -105,6 +105,10 @@ TEST(hardware_driver_ctx, dma_zerocopy_benchmark)
 		++blocksize_index)
 	{
 		unsigned int blocksize = benchmark_block_sizes[blocksize_index];
+		/* Don't use streaming mode over 256k */
+		if (mode == dyplo::HardwareDMAFifo::MODE_STREAMING &&
+		    blocksize > 256*1024)
+			break;
 		static const unsigned int num_blocks = 2;
 		std::cout << ' ' << (blocksize>>10) << "k:";
 		dyplo::HardwareDMAFifo::Block *block;
