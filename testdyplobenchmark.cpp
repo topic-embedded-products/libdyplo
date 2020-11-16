@@ -109,7 +109,7 @@ TEST(hardware_driver_ctx, dma_zerocopy_benchmark)
 		if (mode == dyplo::HardwareDMAFifo::MODE_STREAMING &&
 		    blocksize > 256*1024)
 			break;
-		static const unsigned int num_blocks = 2;
+		static const unsigned int num_blocks = 4;
 		std::cout << ' ' << (blocksize>>10) << "k:";
 		dyplo::HardwareDMAFifo::Block *block;
 		dyplo::HardwareDMAFifo dma0r(context.openDMA(dma_index, O_RDONLY));
@@ -153,16 +153,20 @@ TEST(hardware_driver_ctx, dma_zerocopy_benchmark)
 			dma0w.enqueue(block);
 		}
 		unsigned int total_received = 0;
-		for (unsigned int i = (48*1024*1024)/blocksize; i != 0; --i)
+		do
 		{
-			block = dma0w.dequeue();
-			block->bytes_used = block->size;
-			dma0w.enqueue(block);
-			block = dma0r.dequeue();
-			total_received += block->bytes_used;
-			block->bytes_used = block->size;
-			dma0r.enqueue(block);
-		}
+			for (unsigned int i = (32*1024*1024)/blocksize; i != 0; --i)
+			{
+				block = dma0w.dequeue();
+				block->bytes_used = block->size;
+				dma0w.enqueue(block);
+				block = dma0r.dequeue();
+				total_received += block->bytes_used;
+				block->bytes_used = block->size;
+				dma0r.enqueue(block);
+			}
+			timer.stop();
+		} while (timer.elapsed_us() < 500000);
 		for (unsigned int i = 0 ; i < num_blocks; ++i)
 		{
 			block = dma0r.dequeue();
@@ -211,14 +215,18 @@ TEST(hardware_driver_ctx, dma_bounce_benchmark)
 			size_t bytes = dma0w.write(&write_buffer[0], blocksize);
 			EQUAL(blocksize, bytes);
 		}
-		for (unsigned int i = (16*1024*1024)/blocksize; i != 0; --i)
+		do
 		{
-			ssize_t bytes = dma0r.read(&read_buffer[0], blocksize);
-			EQUAL(blocksize, bytes);
-			total_received += bytes;
-			bytes = dma0w.write(&write_buffer[0], blocksize);
-			EQUAL(blocksize, bytes);
-		}
+			for (unsigned int i = (16*1024*1024)/blocksize; i != 0; --i)
+			{
+				ssize_t bytes = dma0r.read(&read_buffer[0], blocksize);
+				EQUAL(blocksize, bytes);
+				total_received += bytes;
+				bytes = dma0w.write(&write_buffer[0], blocksize);
+				EQUAL(blocksize, bytes);
+			}
+			timer.stop();
+		} while (timer.elapsed_us() < 500000);
 		for (unsigned int i = 0 ; i < num_blocks; ++i)
 		{
 			ssize_t bytes = dma0r.read(&read_buffer[0], blocksize);
